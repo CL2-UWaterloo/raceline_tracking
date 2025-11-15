@@ -78,8 +78,8 @@ class Simulator:
             self.axis.set_xlim(self.car.state[0] - 200, self.car.state[0] + 200)
             self.axis.set_ylim(self.car.state[1] - 200, self.car.state[1] + 200)
 
-            desired = controller(self.car.state, self.car.parameters, self.rt)
-            cont = lower_controller(self.car.state, desired, self.car.parameters)
+            desired = controller(self.car.state, self.car.parameters, self.rt) # Get a and v_omega
+            cont = lower_controller(self.car.state, desired, self.car.parameters) # Get v, omega, s_x, and s_y?
             self.car.update(cont)
             self.update_status()
             self.check_track_limits()
