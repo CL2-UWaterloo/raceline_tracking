@@ -20,9 +20,9 @@ def lower_controller( # C_2 C_1
     a = 5.0 * (desired[1] - v_current)  # Proportional control
     
     # Process variable = delta
-    K_p = 0.001
+    K_p = 0.0001
     K_i = 1
-    K_d = 1
+    K_d = 0.1
     heading_error = (desired[0] - state[4]) / 100
     # Normalize angle to [-pi, pi]
     heading_error = np.arctan2(np.sin(heading_error), np.cos(heading_error))
@@ -47,7 +47,7 @@ def controller( # S_1 S_2
     closest_idx = np.argmin(distances)
     
     # Look-ahead distance (tune this parameter)
-    look_ahead = 5.0  # meters ahead on track
+    look_ahead = 1.0  # meters ahead on track
     
     # Find target point ahead on raceline
     cumulative_dist = 0
@@ -66,8 +66,8 @@ def controller( # S_1 S_2
     target_point = racetrack.centerline[target_idx]
     
     # Calculate desired velocity vector
-    dx_des = target_point[0] - x
-    dy_des = target_point[1] - y
+    dx_des = (target_point[0] - x) / dt
+    dy_des = (target_point[1] - y) / dt
     
     # Desired heading to target
     delta_desired = np.arctan2(dy_des, dx_des)
