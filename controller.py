@@ -1,8 +1,11 @@
 import numpy as np
-from math import atan2, e
+from math import atan2, e, floor
 from numpy.typing import ArrayLike
 
 from simulator import RaceTrack
+
+global iterator
+iterator = 0
 
 def lower_controller( # C_2 C_1
     state : ArrayLike, desired : ArrayLike, parameters : ArrayLike
@@ -15,28 +18,32 @@ def lower_controller( # C_2 C_1
     assert(desired.shape == (2,))
 
     # Control law for acceleration
-    v_current = np.sqrt((state[2] * 10)**2 + (state[3] * 10)**2)
+    v_current = np.sqrt((state[2])**2 + (state[3])**2)
 
     a = 5.0 * (desired[1] - v_current)  # Proportional control
     
     # Process variable = delta
-    K_p = 0.0001
+    K_p = 0.1
     K_i = 1
-    K_d = 0.1
-    heading_error = (desired[0] - state[4]) / 100
+    K_d = 10
+    heading_error = (desired[0] - state[4]) / 1
     # Normalize angle to [-pi, pi]
     heading_error = np.arctan2(np.sin(heading_error), np.cos(heading_error))
     P_control = desired[0] * K_p
     D_control = heading_error * K_d
 
     v_delta = P_control + D_control
+    print("V_DELTA: " + str(v_delta))
 
-    return np.array([v_delta, a]).T
+    return np.array([a, v_delta]).T
 
 def controller( # S_1 S_2
     state : ArrayLike, parameters : ArrayLike, racetrack : RaceTrack
 ) -> ArrayLike:
         # Current position
+
+    global iterator
+    iterator += 0.25
     x, y = state[0], state[1]
     v_x, v_y = state[2], state[3]
     psi = state[4]  # heading angle
@@ -47,7 +54,7 @@ def controller( # S_1 S_2
     closest_idx = np.argmin(distances)
     
     # Look-ahead distance (tune this parameter)
-    look_ahead = 1.0  # meters ahead on track
+    look_ahead = 2.0  # meters ahead on track
     
     # Find target point ahead on raceline
     cumulative_dist = 0
@@ -62,17 +69,24 @@ def controller( # S_1 S_2
             break
     
     # Desired position after one cycle (dt = 0.001s from simulator)
-    dt = 0.001
-    target_point = racetrack.centerline[target_idx]
+    dt = 0.01
+    target_point = racetrack.centerline[floor(target_idx)]
+    print("TARGET POINT: " + str(target_point))
     
     # Calculate desired velocity vector
-    dx_des = (target_point[0] - x) / dt
-    dy_des = (target_point[1] - y) / dt
+    dx_des = (target_point[0] - x)
+    dy_des = (target_point[1] - y)
     
     # Desired heading to target
-    delta_desired = np.arctan2(dy_des, dx_des)
+    delta_desired = ((np.atan2(dy_des, dx_des) - state[2]) * parameters[0]) / (50 * dt)
+
+    print("DELTA_DESIRED: " + str(delta_desired))
     
     # Desired speed (from raceline optimization or constant)
-    v_desired = 50.0  # m/s (tune based on track)
+    test_const = -1
+    v_change = (dy_des / dx_des) * test_const * 0
+    print("V_CHANGE: " + str(v_change))
+    v_desired = 50.0
+    # v_desired = min((state[3] + v_change), parameters[9]) # m/s (tune based on track)
     
     return np.array([delta_desired, v_desired])
