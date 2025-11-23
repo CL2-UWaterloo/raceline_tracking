@@ -1,5 +1,5 @@
 import numpy as np
-from math import atan2
+from math import atan2, e
 from numpy.typing import ArrayLike
 
 from simulator import RaceTrack
@@ -15,15 +15,21 @@ def lower_controller( # C_2 C_1
     assert(desired.shape == (2,))
 
     # Control law for acceleration
-    v_current = np.sqrt(state[2]**2 + state[3]**2)
+    v_current = np.sqrt((state[2] * 10)**2 + (state[3] * 10)**2)
 
     a = 5.0 * (desired[1] - v_current)  # Proportional control
     
-    # Control law for angular velocity (heading control)
-    heading_error = desired[0] - state[4]
+    # Process variable = delta
+    K_p = 0.001
+    K_i = 1
+    K_d = 1
+    heading_error = (desired[0] - state[4]) / 100
     # Normalize angle to [-pi, pi]
     heading_error = np.arctan2(np.sin(heading_error), np.cos(heading_error))
-    v_delta = 2.0 * heading_error  # Proportional control
+    P_control = desired[0] * K_p
+    D_control = heading_error * K_d
+
+    v_delta = P_control + D_control
 
     return np.array([v_delta, a]).T
 
@@ -67,34 +73,6 @@ def controller( # S_1 S_2
     delta_desired = np.arctan2(dy_des, dx_des)
     
     # Desired speed (from raceline optimization or constant)
-    v_desired = 20.0  # m/s (tune based on track)
+    v_desired = 50.0  # m/s (tune based on track)
     
     return np.array([delta_desired, v_desired])
-
-    # CAN TREAT DISCRETE SYSTEM AS CONTINUOUS BECAUSE WE HAVE UNDERLYING DIFF EQN
-    # Dist can be calc'd by speed and sampling speed
-    # Set desired v to max if steering angle is 0, else set to min
-        # TEST RUN: a = a_max always, only direction changes
-
-    # To get desired steering rate, find change in heading rate based on desired steering angle (from track),
-
-    # v_r = state[3]
-    # if v_r == 0:
-    #     v_r = 1
-    
-    # min_distance = np.argmin( np.linalg.norm( rt.centerline - np.array([state[0], state[1]]), axis=1 ) )
-
-    # delta = ((atan2( state[1],  state[0]) - state[2])*parameters[0]) / (1 * v_r)
-
-    # v_r \approx ((s_x at index i+1) - (s_x at index i))/t_omega
-    # phi \approx ((heading at index i+1) - (heading at index i))/t_omega
-    # omega_r \approx (phi * l_wb) / v_r
-    # v_omega \approx min(|(omega_r - omega)|/1 second, v_omega max)
-
-    # if omega_r == 0:
-        # a = a_max
-    # else:
-        # a = -a_max
-
-
-    # return np.array([delta, v_r]).T
