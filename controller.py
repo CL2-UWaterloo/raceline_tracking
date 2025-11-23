@@ -20,7 +20,7 @@ def lower_controller( # C_2 C_1
     # Control law for acceleration
     v_current = state[3] #np.sqrt((state[2])**2 + (state[3])**2)
 
-    a = 5.0 * (desired[1] - v_current)  # Proportional control
+    a = 5 * (desired[1] - v_current)  # Proportional control
     if a < 0:
         a = max(a, parameters[8])
     else:
@@ -31,7 +31,7 @@ def lower_controller( # C_2 C_1
     # Process variable = delta
     K_p = 0.1
     K_i = 1
-    K_d = 10
+    K_d = 15
     heading_error = ((desired[0] - (state[4] + state[2])) * parameters[0]) / (50 * 0.1)
     # Normalize angle to [-pi, pi]
     heading_error = atan2(np.sin(heading_error), np.cos(heading_error))
@@ -42,6 +42,9 @@ def lower_controller( # C_2 C_1
     print("V_DELTA: " + str(v_delta))
 
     return np.array([v_delta, a]).T
+
+global prev_dist
+prev_dist = 0
 
 def controller( # S_1 S_2
     state : ArrayLike, parameters : ArrayLike, racetrack : RaceTrack
@@ -60,7 +63,7 @@ def controller( # S_1 S_2
     closest_idx = np.argmin(distances)
     
     # Look-ahead distance (tune this parameter)
-    look_ahead = 1.0  # meters ahead on track
+    look_ahead = 3.0  # meters ahead on track
     
     # Find target point ahead on raceline
     cumulative_dist = 0
@@ -95,14 +98,22 @@ def controller( # S_1 S_2
     print("DELTA_DESIRED: " + str(delta_desired))
     
     # Desired speed (from raceline optimization or constant)
-    v_change_const = 1
-    v_change = sqrt(dy_des**2 + dx_des**2) * test_const
+    global prev_dist
+    v_change_const = 2
+    v_change = sqrt(dy_des**2 + dx_des**2) * v_change_const
+    print("HEADING: " + str(state[2]))
     print("V_CHANGE: " + str(v_change))
-    v_desired = (state[3] - v_change)
-    if v_desired < 0:
-        v_desired = max(v_desired, 21)
-    else:
-        v_desired = min(v_desired, 21) # m/s (tune based on track)
+    v_desired = (state[3] + v_change)
+    if v_desired < parameters[2] or abs(state[2]) > 0.15:
+        v_desired = 1
+    elif abs(state[2]) > 0.12:
+        v_desired = 3
+    elif abs(state[2]) < 0.05 and abs(state[2]) > 0.02:
+        v_desired = 15
+    elif abs(state[2]) < 0.08 and abs(state[2]) > 0.05:
+        v_desired = 5
+    elif v_desired > min(30, parameters[5]):
+        v_desired = min(30, parameters[5])
     print(v_desired)
     
     return np.array([delta_desired, v_desired])
