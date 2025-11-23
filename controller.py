@@ -1,5 +1,5 @@
 import numpy as np
-from math import atan2, e, floor
+from math import atan2, e, floor, sqrt
 from numpy.typing import ArrayLike
 
 from simulator import RaceTrack
@@ -21,6 +21,12 @@ def lower_controller( # C_2 C_1
     v_current = state[3] #np.sqrt((state[2])**2 + (state[3])**2)
 
     a = 5.0 * (desired[1] - v_current)  # Proportional control
+    if a < 0:
+        a = max(a, parameters[8])
+    else:
+        a = min(a, parameters[10])
+
+    # Once desired[0] is a certain level of positive, it starts cradlng
     
     # Process variable = delta
     K_p = 0.1
@@ -28,7 +34,7 @@ def lower_controller( # C_2 C_1
     K_d = 10
     heading_error = ((desired[0] - (state[4] + state[2])) * parameters[0]) / (50 * 0.1)
     # Normalize angle to [-pi, pi]
-    # heading_error = atan2(np.sin(heading_error), np.cos(heading_error))
+    heading_error = atan2(np.sin(heading_error), np.cos(heading_error))
     P_control = desired[0] * K_p
     D_control = heading_error * K_d
 
@@ -48,6 +54,7 @@ def controller( # S_1 S_2
     current_delta = state[4]
     
     # Find closest point on raceline
+    global iterator
     car_pos = np.array([x, y])
     distances = np.linalg.norm(racetrack.centerline - car_pos, axis=1)
     closest_idx = np.argmin(distances)
@@ -56,21 +63,20 @@ def controller( # S_1 S_2
     look_ahead = 1.0  # meters ahead on track
     
     # Find target point ahead on raceline
-    global iterator
     cumulative_dist = 0
-    target_idx = iterator
+    target_idx = closest_idx
     
-    for i in range(iterator, len(racetrack.centerline)):
-        if i == iterator:
+    for i in range(closest_idx, len(racetrack.centerline)):
+        if i == closest_idx:
             continue
         cumulative_dist += np.linalg.norm(racetrack.centerline[i] - racetrack.centerline[i-1])
         if cumulative_dist >= look_ahead:
             target_idx = i
             break
 
-    dist_const = 5
-    if ( np.linalg.norm(racetrack.centerline[target_idx] - car_pos) < dist_const ):
-        iterator = target_idx
+    # dist_const = 7
+    # if ( np.linalg.norm(racetrack.centerline[target_idx] - car_pos) < dist_const ):
+    # iterator = closest_idx
     
     # Desired position after one cycle (dt = 0.001s from simulator)
     dt = 0.01
@@ -89,14 +95,14 @@ def controller( # S_1 S_2
     print("DELTA_DESIRED: " + str(delta_desired))
     
     # Desired speed (from raceline optimization or constant)
-    test_const = 1
-    v_change = (dy_des / dx_des) * test_const
+    v_change_const = 1
+    v_change = sqrt(dy_des**2 + dx_des**2) * test_const
     print("V_CHANGE: " + str(v_change))
     v_desired = (state[3] - v_change)
     if v_desired < 0:
-        v_desired = max(v_desired, parameters[8])
+        v_desired = max(v_desired, 21)
     else:
-        v_desired = min(v_desired, parameters[10]) # m/s (tune based on track)
+        v_desired = min(v_desired, 21) # m/s (tune based on track)
     print(v_desired)
     
     return np.array([delta_desired, v_desired])
