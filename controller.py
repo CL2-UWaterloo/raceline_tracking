@@ -18,7 +18,7 @@ def lower_controller( # C_2 C_1
     assert(desired.shape == (2,))
 
     # Control law for acceleration
-    v_current = np.sqrt((state[2])**2 + (state[3])**2)
+    v_current = state[3] #np.sqrt((state[2])**2 + (state[3])**2)
 
     a = 5.0 * (desired[1] - v_current)  # Proportional control
     
@@ -35,7 +35,7 @@ def lower_controller( # C_2 C_1
     v_delta = P_control + D_control
     print("V_DELTA: " + str(v_delta))
 
-    return np.array([a, v_delta]).T
+    return np.array([v_delta, a]).T
 
 def controller( # S_1 S_2
     state : ArrayLike, parameters : ArrayLike, racetrack : RaceTrack
@@ -83,10 +83,15 @@ def controller( # S_1 S_2
     print("DELTA_DESIRED: " + str(delta_desired))
     
     # Desired speed (from raceline optimization or constant)
-    test_const = -1
-    v_change = (dy_des / dx_des) * test_const * 0
+    test_const = 2
+    v_change = (dy_des / dx_des) * test_const
     print("V_CHANGE: " + str(v_change))
-    v_desired = 50.0
-    # v_desired = min((state[3] + v_change), parameters[9]) # m/s (tune based on track)
+    # v_desired = 50.0
+    v_desired = (state[3] - v_change)
+    if v_desired < 0:
+        v_desired = max (v_desired, parameters[8])
+    else:
+        v_desired = min(v_desired, parameters[10]) # m/s (tune based on track)
+    print(v_desired)
     
     return np.array([delta_desired, v_desired])
