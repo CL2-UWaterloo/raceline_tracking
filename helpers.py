@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.typing import ArrayLike
 
 
 def distance_to_centerline(position: np.ndarray, centerline: np.ndarray) -> float:
@@ -29,3 +30,47 @@ def index_of_closest_point(position: np.ndarray, centerline: np.ndarray) -> int:
     deltas = centerline - position
     distances = np.linalg.norm(deltas, axis=1)
     return np.argmin(distances)
+
+
+def estimate_upcoming_curvature(
+    state: ArrayLike, waypoints: ArrayLike, preview_points: int = 10
+):
+    """
+    Estimate the maximum curvature in the upcoming section of the path.
+    Used for dynamic lookahead adjustment.
+
+    Args:
+        state: Current state
+        waypoints: Raceline waypoints
+        preview_points: Number of points to check ahead
+
+    Returns:
+        Maximum curvature in upcoming section
+    """
+    current_pos = np.array([state[0], state[1]])
+    closest_idx = index_of_closest_point(current_pos, waypoints)
+
+    max_curvature = 0.0
+
+    for i in range(min(preview_points, len(waypoints))):
+        idx = (closest_idx + i) % len(waypoints)
+        idx_prev = (idx - 1) % len(waypoints)
+        idx_next = (idx + 1) % len(waypoints)
+
+        p1 = waypoints[idx_prev]
+        p2 = waypoints[idx]
+        p3 = waypoints[idx_next]
+
+        # Menger curvature
+        area = 0.5 * abs(
+            (p2[0] - p1[0]) * (p3[1] - p1[1]) - (p3[0] - p1[0]) * (p2[1] - p1[1])
+        )
+        a = np.linalg.norm(p2 - p1)
+        b = np.linalg.norm(p3 - p2)
+        c = np.linalg.norm(p3 - p1)
+
+        if a * b * c > 1e-6:
+            curvature = 4 * area / (a * b * c)
+            max_curvature = max(max_curvature, curvature)
+
+    return max_curvature
