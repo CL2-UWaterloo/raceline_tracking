@@ -1,7 +1,9 @@
 import numpy as np
 from numpy.typing import ArrayLike
+from typing import TYPE_CHECKING
 
-from simulator import RaceTrack
+if TYPE_CHECKING:
+    from simulator import RaceTrack
 
 from blocks import S1, S2
 from helpers import estimate_upcoming_curvature
@@ -10,7 +12,7 @@ from helpers import estimate_upcoming_curvature
 class C1:
     def __init__(self):
         # Parameters for velocity PID controller
-        self.K_p = 3.3 
+        self.K_p = 3.0 
         self.K_i = 0.1
         self.K_d = 0.5
         self.prev_error = 0.0
@@ -44,18 +46,23 @@ class C1:
 class C2:
     def __init__(self):
         # Parameters for steering PID controller
-        self.K_p = 4.7  
-        self.K_i = 0.2  
-        self.K_d = 1.0  
+        self.K_p = 7.2
+        self.K_i = 0.2
+        self.K_d = 1.6  # Reduced to prevent oscillations in tight corners
         self.prev_error = 0.0
         self.integral_error = 0.0
-        self.max_integral = 1.5  # Reduced to prevent too much buildup
+        self.max_integral = 1.5
+
+        # Derivative filtering to smooth out noise
+        self.derivative_filter_alpha = 0.3  # Low-pass filter coefficient
+        self.filtered_derivative = 0.0
 
     def step(
         self, state: np.ndarray, parameters: np.ndarray, desired_steering: float
     ) -> float:
         """
         A PID controller, outputs a steering rate command to reach desired steering angle
+        Uses filtered derivative to prevent oscillations in tight corners
         """
         current_steering = state[2]
         steering_error = desired_steering - current_steering
@@ -64,12 +71,20 @@ class C2:
         self.integral_error += steering_error
         self.integral_error = np.clip(self.integral_error, -self.max_integral, self.max_integral)
 
-        # Derivative term
-        derivative = steering_error - self.prev_error
+        # Derivative term with low-pass filtering to reduce noise
+        raw_derivative = steering_error - self.prev_error
+        self.filtered_derivative = (
+            self.derivative_filter_alpha * raw_derivative +
+            (1 - self.derivative_filter_alpha) * self.filtered_derivative
+        )
         self.prev_error = steering_error
 
-        # PID formula
-        steering_rate = self.K_p * steering_error + self.K_i * self.integral_error + self.K_d * derivative
+        # PID formula with filtered derivative
+        steering_rate = (
+            self.K_p * steering_error +
+            self.K_i * self.integral_error +
+            self.K_d * self.filtered_derivative
+        )
 
         max_steering_vel = parameters[9]
         return np.clip(steering_rate, -max_steering_vel, max_steering_vel)
@@ -107,7 +122,7 @@ def lower_controller(
 
 
 def controller(
-    state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack
+    state: ArrayLike, parameters: ArrayLike, racetrack
 ) -> ArrayLike:
     # Vehicle parameters
     wheelbase = parameters[0]
@@ -115,7 +130,7 @@ def controller(
 
     # Velocity-based lookahead (simpler is better)
     # Higher speed = look further ahead
-    base_lookahead = 20.0 + current_velocity * 0.3
+    base_lookahead = 15.0 + current_velocity * 0.2
     lookahead_distance = np.clip(base_lookahead, 15.0, 45.0)
 
     desired_steering = s2.step(
