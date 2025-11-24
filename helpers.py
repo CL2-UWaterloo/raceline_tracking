@@ -52,14 +52,15 @@ def estimate_upcoming_curvature(
 
     max_curvature = 0.0
 
-    for i in range(min(preview_points, len(waypoints))):
+    for i in range(min(preview_points, len(waypoints) - 2)):
         idx = (closest_idx + i) % len(waypoints)
-        idx_prev = (idx - 1) % len(waypoints)
-        idx_next = (idx + 1) % len(waypoints)
+        idx_next = (closest_idx + i + 1) % len(waypoints)
+        idx_next_next = (closest_idx + i + 2) % len(waypoints)
 
-        p1 = waypoints[idx_prev]
-        p2 = waypoints[idx]
-        p3 = waypoints[idx_next]
+        # Look ahead using three consecutive forward points
+        p1 = waypoints[idx]
+        p2 = waypoints[idx_next]
+        p3 = waypoints[idx_next_next]
 
         # Menger curvature
         area = 0.5 * abs(

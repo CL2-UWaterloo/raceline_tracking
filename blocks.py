@@ -12,23 +12,21 @@ class S1:
     """
 
     def __init__(self):
-        self.base_velocity = 50.0  # m/s
-        self.lookahead_distance = 20  # index points
-        self.curvature_slowdown_threshold = (
-            0.01  # curvature threshold for speed slowdown
-        )
-        self.curvature_speedup_threshold = (
-            0.005  # curvature threshold for speed speedup
-        )
+        self.base_velocity = 80.0  # m/s - target speed on straights
+        self.lookahead_distance = 25  # index points - balanced lookahead
+        self.max_lateral_accel = 15.0  # m/s^2 (~1.5g) - more aggressive
 
     def step(self, state: np.ndarray, centerline: np.ndarray) -> float:
         """
-        Target velocity should be intelligently be set based on upcoming curvature
+        Target velocity should be intelligently set based on upcoming curvature.
+        Uses physics-based velocity limits: v_max = sqrt(a_lat_max / curvature)
         """
-        closest_position = helpers.distance_to_centerline(state[0:2], centerline)
         closest_index = helpers.index_of_closest_point(state[0:2], centerline)
 
-        curvatures = []
+        # Find maximum curvature in upcoming section
+        max_curvature = 0.0
+        cumulative_distance = 0.0
+
         for i in range(self.lookahead_distance):
             idx = (closest_index + i) % len(centerline)
             idx_next = (closest_index + i + 1) % len(centerline)
@@ -53,27 +51,25 @@ class S1:
             len_c = np.linalg.norm(p3 - p1)
 
             # If area of triangle is negligible
-            if np.isclose(area, 0.0):
+            if np.isclose(area, 0.0) or (len_a * len_b * len_c) < 1e-6:
                 curvature = 0.0
             else:
                 curvature = (4 * area) / (len_a * len_b * len_c)
 
-            print(f"Curvature at index {idx}: {curvature}")
-            curvatures.append(curvature)
+            # Weight nearby corners more heavily
+            distance_from_car = i / self.lookahead_distance
+            weight = 1.0 - (distance_from_car * 0.4)  # 100% to 60% weight
+            weighted_curvature = curvature * weight
 
-        curvature_avg = np.mean(curvatures)
-        print(f"Average curvature over lookahead: {curvature_avg}")
+            max_curvature = max(max_curvature, weighted_curvature)
 
-        reference_velocity = self.base_velocity
-        if curvature_avg > self.curvature_slowdown_threshold:
-            # Slow down
-            reference_velocity = self.base_velocity * 0.5
-        elif curvature_avg < self.curvature_speedup_threshold:
-            # Speed up
-            reference_velocity = self.base_velocity * 1.2
+        # Physics-based velocity limit for the tightest corner ahead
+        if max_curvature > 1e-4:
+            reference_velocity = np.sqrt(self.max_lateral_accel / max_curvature)
+        else:
+            reference_velocity = self.base_velocity
 
-        print(f"Reference velocity: {reference_velocity}")
-        return np.clip(reference_velocity, -10, 100)
+        return np.clip(reference_velocity, 25.0, 100.0)
 
 
 class S2:

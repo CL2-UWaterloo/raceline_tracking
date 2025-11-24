@@ -9,44 +9,68 @@ from helpers import estimate_upcoming_curvature
 
 class C1:
     def __init__(self):
-        # Parameters for velocity PD controller
-        self.K_p = 2.0
-        self.K_d = 0.1
+        # Parameters for velocity PID controller
+        self.K_p = 3.0
+        self.K_i = 0.1
+        self.K_d = 0.5
+        self.prev_error = 0.0
+        self.integral_error = 0.0
+        self.max_integral = 5.0
 
     def step(
         self, state: np.ndarray, parameters: np.ndarray, desired_velocity: float
     ) -> float:
         """
-        A simple PID controller, outputs an acceleration command to reach desired velocity
+        A PID controller, outputs an acceleration command to reach desired velocity
         """
         current_velocity = state[3]
         error = desired_velocity - current_velocity
 
-        a = self.K_p * error
+        # Integral term with anti-windup
+        self.integral_error += error
+        self.integral_error = np.clip(self.integral_error, -self.max_integral, self.max_integral)
 
-        # TODO: Add derivative terms
+        # Derivative term
+        derivative = error - self.prev_error
+        self.prev_error = error
+
+        # PID formula
+        a = self.K_p * error + self.K_i * self.integral_error + self.K_d * derivative
+
         max_acceleration = parameters[10]
         return np.clip(a, -max_acceleration, max_acceleration)
 
 
 class C2:
     def __init__(self):
-        # Parameters for steering Pd controller
-        self.K_p = 3.0
-        self.K_d = 0.5
+        # Parameters for steering PID controller
+        self.K_p = 5.0  # Increased for faster response
+        self.K_i = 0.2  # Slightly increased to eliminate offset
+        self.K_d = 1.0  # Increased damping
+        self.prev_error = 0.0
+        self.integral_error = 0.0
+        self.max_integral = 1.5  # Reduced to prevent too much buildup
 
     def step(
         self, state: np.ndarray, parameters: np.ndarray, desired_steering: float
     ) -> float:
         """
-        A simple PD controller, outputs a steering rate command to reach desired steering angle
+        A PID controller, outputs a steering rate command to reach desired steering angle
         """
         current_steering = state[2]
         steering_error = desired_steering - current_steering
 
-        steering_rate = self.K_p * steering_error
+        # Integral term with anti-windup
+        self.integral_error += steering_error
+        self.integral_error = np.clip(self.integral_error, -self.max_integral, self.max_integral)
 
-        # TODO: Add derivative terms
+        # Derivative term
+        derivative = steering_error - self.prev_error
+        self.prev_error = steering_error
+
+        # PID formula
+        steering_rate = self.K_p * steering_error + self.K_i * self.integral_error + self.K_d * derivative
+
         max_steering_vel = parameters[9]
         return np.clip(steering_rate, -max_steering_vel, max_steering_vel)
 
@@ -89,29 +113,10 @@ def controller(
     wheelbase = parameters[0]
     current_velocity = state[3]
 
-    # Dynamic lookahead distance based on velocity AND upcoming curvature
-    # Estimate upcoming path curvature
-    upcoming_curvature = estimate_upcoming_curvature(
-        state, racetrack.centerline, preview_points=15
-    )
-
-    # Base lookahead from velocity (higher speed = look further)
-    base_lookahead = 12.0 + current_velocity * 0.4
-
-    # Curvature adjustment: high curvature ahead = increase lookahead to prepare earlier
-    # Low curvature (straight) = can use shorter lookahead
-    if upcoming_curvature > 0.01:  # Significant curve ahead
-        # Increase lookahead proportionally to curvature (more curve = look further)
-        curvature_factor = 1.0 + min(
-            upcoming_curvature * 20.0, 1.5
-        )  # Up to 2.5x increase
-    else:  # Straight section
-        curvature_factor = 0.9  # Slightly reduce for efficiency
-
-    lookahead_distance = base_lookahead * curvature_factor
-    lookahead_distance = np.clip(
-        lookahead_distance, 8.0, 60.0
-    )  # Increased max for tight corners
+    # Velocity-based lookahead (simpler is better)
+    # Higher speed = look further ahead
+    base_lookahead = 20.0 + current_velocity * 0.3
+    lookahead_distance = np.clip(base_lookahead, 15.0, 45.0)
 
     desired_steering = s2.step(
         state, racetrack.centerline, lookahead_distance, wheelbase
