@@ -2,9 +2,6 @@ import numpy as np
 from numpy.typing import ArrayLike
 from racetrack import RaceTrack
 
-# --------------------------------------------------------------------------
-# Digital PID Controller
-# --------------------------------------------------------------------------
 class PIDController:
     """
     Discrete-Time PID Controller with Anti-Windup and Derivative Filtering.
@@ -193,17 +190,3 @@ class VehicleController:
         desired_steer = np.clip(desired_steer, -self.max_steer_angle, self.max_steer_angle)
         
         return desired_steer, self.target_velocity
-
-# --------------------------------------------------------------------------
-# Legacy Interface (for compatibility if needed, but we prefer Class usage)
-# --------------------------------------------------------------------------
-
-# We can keep these as shims if strictly required, 
-# but we will modify simulator.py to use the class.
-def controller(state, parameters, racetrack):
-    # Placeholder for legacy call
-    pass
-
-def lower_controller(state, desired, parameters):
-    # Placeholder for legacy call
-    pass
