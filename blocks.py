@@ -12,9 +12,9 @@ class S1:
     """
 
     def __init__(self):
-        self.base_velocity = 80.0  # m/s - target speed on straights
-        self.lookahead_distance = 25  # index points - balanced lookahead
-        self.max_lateral_accel = 15.0  # m/s^2 (~1.5g) - more aggressive
+        self.base_velocity = 75.0  # m/s - slightly more conservative
+        self.lookahead_distance = 30  # index points - look further ahead
+        self.max_lateral_accel = 12.5  # m/s^2 (~1.3g) - more conservative
 
     def step(self, state: np.ndarray, centerline: np.ndarray) -> float:
         """
@@ -56,9 +56,9 @@ class S1:
             else:
                 curvature = (4 * area) / (len_a * len_b * len_c)
 
-            # Weight nearby corners more heavily
+            # Weight nearby corners MUCH more heavily using exponential decay
             distance_from_car = i / self.lookahead_distance
-            weight = 1.0 - (distance_from_car * 0.4)  # 100% to 60% weight
+            weight = np.exp(-2.0 * distance_from_car)  # Exponential: 100% → 14% → 2%
             weighted_curvature = curvature * weight
 
             max_curvature = max(max_curvature, weighted_curvature)
