@@ -11,9 +11,12 @@ from controller import lower_controller, controller
 
 class Simulator:
 
+
     def __init__(self, rt : RaceTrack):
         matplotlib.rcParams["figure.dpi"] = 300
         matplotlib.rcParams["font.size"] = 8
+
+        self.trajectory = []
 
         self.rt = rt
         self.figure, self.axis = plt.subplots(1, 1)
@@ -108,6 +111,25 @@ class Simulator:
                 fontsize=8, color="Red"
             )
 
+            #             # plot trajectory
+            # self.trajectory.append([self.car.state[0], self.car.state[1], self.car.state[3]])
+            # if len(self.trajectory) > 1:
+            #     trajectory_array = np.array(self.trajectory)
+            #     for i in range(len(trajectory_array) - 1):
+            #         speed = trajectory_array[i, 2]
+            #         if speed < 20:
+            #             color = 'red'
+            #         elif speed < 50:
+            #             ratio = (speed - 20) / 30
+            #             color = (1.0, ratio * 0.65, 0.0)
+            #         else:
+            #             ratio = (speed - 50) / 50
+            #             color = ((1.0 - ratio), 0.65 + ratio * 0.35, 0.0)
+            #         self.axis.plot(trajectory_array[i:i+2, 0], trajectory_array[i:i+2, 1], 
+            #                      color=color, linewidth=2, alpha=0.8)
+
+            
+
             self.figure.canvas.draw()
             return True
 
@@ -120,9 +142,10 @@ class Simulator:
         if progress > 10.0 and not self.lap_started:
             self.lap_started = True
     
-        if progress <= 1.0 and self.lap_started and not self.lap_finished:
+        if progress <= 5.0 and self.lap_started and not self.lap_finished:
             self.lap_finished = True
             self.lap_time_elapsed = time() - self.lap_start_time
+            print("FINAL TIME", self.lap_time_elapsed)
 
         if not self.lap_finished and self.lap_start_time is not None:
             self.lap_time_elapsed = time() - self.lap_start_time
@@ -133,3 +156,4 @@ class Simulator:
         self.timer.add_callback(self.run)
         self.lap_start_time = time()
         self.timer.start()
+        print("TIME", self.lap_time_elapsed)

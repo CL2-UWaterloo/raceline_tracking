@@ -108,7 +108,6 @@ def lower_controller(state: ArrayLike, desired: ArrayLike, parameters: ArrayLike
 # ------------------------------------------------------------
 
 def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) -> ArrayLike:
-
     x, y, delta, v, phi = state
 
     # Car parameters
@@ -119,39 +118,67 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
 
     centerline = racetrack.centerline
 
-    # compute heading and curvature and cache them
+    # ------------------------------------------------------
+    # Cache heading and curvature
+    # ------------------------------------------------------
     if not hasattr(racetrack, "_heading"):
         racetrack._heading = compute_heading(centerline)
 
     if not hasattr(racetrack, "_curvature"):
         racetrack._curvature = compute_curvature(centerline, racetrack._heading)
 
-    heading = racetrack._heading
+    heading   = racetrack._heading
     curvature = racetrack._curvature
 
-    # compute cross track error
-    # s - index of nearest track point
-    # e_ct - sideway distance from centerline
+    # ------------------------------------------------------
+    # Cross-track error + LOCAL heading error (no lookahead)
+    # ------------------------------------------------------
     s, e_ct = compute_cross_track_error(state, racetrack)
 
-    # phi_ref - desired heading at nearest track point
+    # desired heading at the same nearest centerline point
     phi_ref = heading[s]
-    # e_phi - error between the desired heading and current heading
-    e_phi = np.arctan2(np.sin(phi_ref - phi), np.cos(phi_ref - phi))
+    e_phi   = np.arctan2(np.sin(phi_ref - phi), np.cos(phi_ref - phi))
 
+    heading_ahead = heading[(s + 8) % len(heading)]
+    dphi_ahead = np.arctan2(np.sin(heading_ahead - heading[s]), 
+                            np.cos(heading_ahead - heading[s]))
 
-    # FEED SIGNAL INTO TRANSFER FUNCTIONS
-    # run reference signal phi_ref and error into PID controller
+    sharpness = abs(dphi_ahead) / np.pi 
+
+    # ------------------------------------------------------
+    # Look-ahead curvature for severity (for gain + speed)
+    # ------------------------------------------------------
+    L_steps = int(1 +  v)    # dynamic look-ahead for curvature
+    N = len(curvature)
+    idx = np.arange(s, s + L_steps) % N
+
+    kappa_ahead = np.max(np.abs(curvature[idx]))  # worst curve coming up
+
+    if not hasattr(racetrack, "_kappa_max"):
+        racetrack._kappa_max = np.max(np.abs(curvature)) + 1e-6
+    kappa_norm = kappa_ahead / racetrack._kappa_max   # in [0,1]
+
+    # mild gain factor (up to ~3x in very tight bits)
+    gain_factor = 1.0 + 2.0 * kappa_norm
+
+    # ------------------------------------------------------
+    # PID on heading error (gain-scheduled, but local)
+    # ------------------------------------------------------
     dt = 0.1
     if not hasattr(racetrack, "_phi_int"):
-        racetrack._phi_int = 0.0
+        racetrack._phi_int  = 0.0
         racetrack._phi_prev = e_phi
 
-    Kp = 0.6 # correcting when angle error grows large
-    Ki = 0.05 # fixing steady state to error = 0
-    Kd = 0.1 # damps overshoot, help react to rapid changes
+    # base gains
+    Kp_base = 0.5
+    Ki_base = 0.04
+    Kd_base = 0.10
 
-    # track states
+    # scale P and I slightly with curvature severity
+    Kp = Kp_base * gain_factor
+    Ki = Ki_base * gain_factor
+    Kd = Kd_base  # derivative unscaled
+
     racetrack._phi_int += e_phi * dt
     racetrack._phi_int = np.clip(racetrack._phi_int, -0.4, 0.4)
 
@@ -160,43 +187,49 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
 
     delta_pid = Kp * e_phi + Ki * racetrack._phi_int + Kd * e_phi_dot
 
-    # cross-track correction - tracks distance from centerline and tries to keep car to trackline
-    Kct = 0.05
+    # ------------------------------------------------------
+    # Cross-track correction (also slightly stronger in tight corners)
+    # ------------------------------------------------------
+    Kct_base = 0.05
+    Kct = Kct_base * (1.0 + 1.0 * kappa_norm)
     delta_ct = Kct * e_ct
 
-    # final steering angle - takes in account the pid output and cross-track output
-    delta_r = delta_pid + delta_ct
+    # ------------------------------------------------------
+    # Curvature feedforward (using local curvature only)
+    # ------------------------------------------------------
+    kappa_here = curvature[s]
+    Kff = 0.9
+    delta_ff = Kff * np.arctan(L * kappa_here)
+
+    # final steering: local heading + cross-track + local curvature FF
+    delta_r = delta_ff + delta_pid + delta_ct
     delta_r = np.clip(delta_r, delta_min, delta_max)
 
-
-    # ===== LOOK-AHEAD CURVATURE =====
-
-    L_steps = int(15 + 0.25 * v)     # dynamic look-ahead based on speed
-    N = len(curvature)
-
-    # get indices of look-ahead region
-    idx = np.arange(s, s + L_steps) % N
-
-    # use the worst curve coming ahead
-    kappa = np.max(np.abs(curvature[idx]))
-
-    # ===== SPEED COMPUTATION USING LATERAL ACCEL LIMIT =====
-
+    # ------------------------------------------------------
+    # SPEED COMPUTATION USING LATERAL ACCEL LIMIT + LOOK-AHEAD
+    # ------------------------------------------------------
     base_speed = 100.0
-    min_turn_speed = 5.0
-    a_lat_max = 8.0                   # lateral acceleration limit
+    min_turn_speed = -10.0
+    a_lat_max = 8.0
 
-    if kappa < 1e-6:
+    v_heading = base_speed - sharpness * (base_speed - 3)
+
+    if kappa_ahead < 1e-6:
         v_curve = base_speed
     else:
-        v_curve = np.sqrt(a_lat_max / (kappa + 1e-9))
+        v_curve = np.sqrt(a_lat_max / (kappa_ahead + 1e-9))
         v_curve = np.clip(v_curve, min_turn_speed, base_speed)
 
-    # ===== ERROR-BASED SLOWDOWN =====
+    # stronger error-based slowdown in severe geometries
+    err_gain = 1.0 + 10 * kappa_norm
 
-    v_r = v_curve - 3.0*abs(e_phi) - 0.5*abs(e_ct)
+    v_r = min(v_curve, v_heading)
+
+    v_r -= err_gain * (3.0 * abs(e_phi) + 0.5 * abs(e_ct))
+
+
     v_r = np.clip(v_r, 1.0, v_max)
 
-
     return np.array([delta_r, v_r])
+
 
