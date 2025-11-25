@@ -51,7 +51,6 @@ def lower_controller(
     e_delta = r_delta - delta
     e_v = r_v - v
     
-    # Compute control outputs using PID
     steering_rate = steering_pid.update(e_delta)
     acceleration = velocity_pid.update(e_v)
     
@@ -70,10 +69,12 @@ def controller(
             closest_idx = i
     
     # compute desired heading based on one point ahead on the centerline
-    lookahead_idx = (closest_idx + 1) % len(racetrack.centerline)
+    lookahead_idx = (closest_idx + 5) % len(racetrack.centerline)
     lookahead_pt = racetrack.centerline[lookahead_idx]
-    delta = np.arctan2(
+    d_next = np.linalg.norm(lookahead_pt - state[0:2])
+    heading = np.arctan2(
         lookahead_pt[1] - state[1],
         lookahead_pt[0] - state[0]
     )
+    delta = (heading - state[4]) * parameters[0] / d_next
     return np.array([delta, 100]).T
