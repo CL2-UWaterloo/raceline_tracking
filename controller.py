@@ -139,6 +139,8 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
     # e_phi - error between the desired heading and current heading
     e_phi = np.arctan2(np.sin(phi_ref - phi), np.cos(phi_ref - phi))
 
+
+    # FEED SIGNAL INTO TRANSFER FUNCTIONS
     # run reference signal phi_ref and error into PID controller
     dt = 0.1
     if not hasattr(racetrack, "_phi_int"):
@@ -162,39 +164,39 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
     Kct = 0.05
     delta_ct = Kct * e_ct
 
-    # ------------------------------------------------------
-    # Total steering angle (direct command)
-    # ------------------------------------------------------
+    # final steering angle - takes in account the pid output and cross-track output
     delta_r = delta_pid + delta_ct
     delta_r = np.clip(delta_r, delta_min, delta_max)
 
-        # ------------------------------------------------------
-    # Curvature-based slowdown (normalized)
-    # ------------------------------------------------------
-    kappa = curvature[s]
 
-    # Cache max curvature to normalize [0, 1]
-    if not hasattr(racetrack, "_kappa_max"):
-        racetrack._kappa_max = np.max(np.abs(curvature)) + 1e-6  # avoid div0
+    # ===== LOOK-AHEAD CURVATURE =====
 
-    kappa_norm = np.clip(abs(kappa) / racetrack._kappa_max, 0.0, 1.0)
+    L_steps = int(15 + 0.25 * v)     # dynamic look-ahead based on speed
+    N = len(curvature)
 
-    # Map curvature to a target curve speed
-    base_speed     = 100.0  # straight-line target speed
-    min_turn_speed = 10.0  # slowest speed in the tightest turn
+    # get indices of look-ahead region
+    idx = np.arange(s, s + L_steps) % N
 
-    v_curve = base_speed - kappa_norm * (base_speed - min_turn_speed)
+    # use the worst curve coming ahead
+    kappa = np.max(np.abs(curvature[idx]))
 
-    # ------------------------------------------------------
-    # Add error-based slowdown on top of curvature-based speed
-    # ------------------------------------------------------
-    v_r = (
-        v_curve
-        - 3.0 * abs(e_phi)
-        - 0.5 * abs(e_ct)
-    )
+    # ===== SPEED COMPUTATION USING LATERAL ACCEL LIMIT =====
 
+    base_speed = 100.0
+    min_turn_speed = 5.0
+    a_lat_max = 8.0                   # lateral acceleration limit
+
+    if kappa < 1e-6:
+        v_curve = base_speed
+    else:
+        v_curve = np.sqrt(a_lat_max / (kappa + 1e-9))
+        v_curve = np.clip(v_curve, min_turn_speed, base_speed)
+
+    # ===== ERROR-BASED SLOWDOWN =====
+
+    v_r = v_curve - 3.0*abs(e_phi) - 0.5*abs(e_ct)
     v_r = np.clip(v_r, 1.0, v_max)
+
 
     return np.array([delta_r, v_r])
 
