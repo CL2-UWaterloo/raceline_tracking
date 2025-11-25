@@ -4,7 +4,7 @@ from numpy.typing import ArrayLike
 from simulator import RaceTrack
 
 class PIDController:
-    def __init__(self, K_p: float, K_i: float, K_d: float, dt: float = 1):
+    def __init__(self, K_p: float, K_i: float, K_d: float, dt: float = 0.1):
         self.K_p = K_p
         self.K_i = K_i
         self.K_d = K_d
@@ -30,6 +30,9 @@ class PIDController:
     def reset(self):
         self.integral = 0.0
         self.prev_error = 0.0
+
+def wrap_to_pi(angle: float) -> float:
+    return (angle + np.pi) % (2 * np.pi) - np.pi
 
 steering_pid = PIDController(K_p=1.0, K_i=0.1, K_d=0.05)
 velocity_pid = PIDController(K_p=0.5, K_i=0.1, K_d=0.01)
@@ -60,21 +63,21 @@ def controller(
     state : ArrayLike, parameters : ArrayLike, racetrack : RaceTrack
 ) -> ArrayLike:
     # using the x and y coordinates of the car, find the closest point on the racetrack centerline
-    min_dist = float('inf')
-    closest_idx = 0
-    for i in range(0, len(racetrack.centerline)):
-        dist = np.linalg.norm(state[0:2] - racetrack.centerline[i])
-        if dist < min_dist:
-            min_dist = dist
-            closest_idx = i
+    
+    centerline_distances = np.linalg.norm(racetrack.centerline - state[0:2], axis=1)
+    closest_idx = np.argmin(centerline_distances)
     
     # compute desired heading based on one point ahead on the centerline
-    lookahead_idx = (closest_idx + 5) % len(racetrack.centerline)
+    lookahead_idx = (closest_idx + 3) % len(racetrack.centerline)
     lookahead_pt = racetrack.centerline[lookahead_idx]
-    d_next = np.linalg.norm(lookahead_pt - state[0:2])
+    
     heading = np.arctan2(
         lookahead_pt[1] - state[1],
         lookahead_pt[0] - state[0]
     )
-    delta = (heading - state[4]) * parameters[0] / d_next
-    return np.array([delta, 100]).T
+    
+    heading = wrap_to_pi(heading) 
+    delta = wrap_to_pi(heading - state[4])
+    desired_velocity = 50 - 40 * abs(delta)
+
+    return np.array([delta, desired_velocity]).T
