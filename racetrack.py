@@ -57,16 +57,14 @@ class RaceTrack:
         self.mpl_left_track_limit_patch = patches.PathPatch(self.mpl_left_track_limit, linestyle="--", fill=False, lw=0.2)
 
         n = self.centerline.shape[0]
-        # self.curvature = np.zeros(n)
         self.desired_speed = np.zeros(n)
         curvature_v_max = np.zeros(n)
         
-        # Parameters for speed planning
         max_v = 100.0          # Maximum speed on straights (m/s)
-        friction_limit = 20.0  # Friction-limited lateral acceleration
+        friction_limit = 20.0  # Determines speed around curves
         max_accel = 20.0
         
-        # Compute desired speed considering lookahead curvature
+        # compute "ideal" speed purely based on curvature
         for i in range(n):
 
             p1 = self.centerline[(i - 1) % n]
@@ -95,6 +93,7 @@ class RaceTrack:
                 curvature_v_max[i] = np.sqrt(friction_limit * radius)
 
         profile = np.clip(curvature_v_max, 0, max_v)
+        # Backpropragation to make sure that for each desired velocity, we can actually hit it based on our max acceleration
         for i in range(n - 1, -1, -1):
             # The next point (conceptually ahead of us)
             next_idx = (i + 1) % n
@@ -107,7 +106,7 @@ class RaceTrack:
             
             # Take the minimum of the physical corner limit and the braking limit
             profile[i] = min(profile[i], allowed_v)
-
+        # Same thing but in the forward directionn
         for i in range(n):
             prev_idx = (i - 1) % n
             dist = np.linalg.norm(self.centerline[i] - self.centerline[prev_idx])
@@ -116,47 +115,6 @@ class RaceTrack:
             profile[i] = min(profile[i], allowed_v)
 
         self.desired_speed = profile
-
-    def _compute_curvature_at_index(self, idx):
-        """
-        Compute curvature at centerline point idx using three consecutive points
-        
-        Returns:
-            curvature (1/m)
-        """
-        n = self.centerline.shape[0]
-        
-        # Get three consecutive points (handling wraparound)
-        p1 = self.centerline[(idx - 1) % n]
-        p2 = self.centerline[idx]
-        p3 = self.centerline[(idx + 1) % n]
-        
-        # Vectors between points
-        v1 = p2 - p1
-        v2 = p3 - p2
-        
-        # Distance between points
-        d1 = np.linalg.norm(v1)
-        d2 = np.linalg.norm(v2)
-        
-        # Avoid division by zero
-        if d1 < 1e-6 or d2 < 1e-6:
-            return 0.0
-        
-        # Curvature using cross product method
-        # kappa = 2 * |v1 × v2| / (|v1| * |v2| * |v1 + v2|)
-        cross = v1[0] * v2[1] - v1[1] * v2[0]
-        denominator = d1 * d2 * (d1 + d2)
-        
-        if abs(denominator) < 1e-9:
-            return 0.0
-        
-        curvature = 2 * abs(cross) / denominator
-        
-        return curvature
-        
-
-        
 
     def plot_track(self, axis : axes.Axes):
         axis.add_patch(self.mpl_centerline_patch)

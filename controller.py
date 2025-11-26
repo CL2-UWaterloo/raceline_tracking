@@ -70,9 +70,7 @@ def controller(
     # desired_velocity = racetrack.desired_speed_map[closest_idx] # racetrack.desired_speed_map[closest_idx]
    
     cur_v = float(state[3])
-    print(cur_v)
     # linearly interpolate lookahead amount from 2 to 10 based on current velocity
-    # v_min=0 -> lookahead=2, v_max=100 -> lookahead=10
     v_min = 0.0
     v_max = 100.0
     lookahead_min = 2
@@ -92,9 +90,9 @@ def controller(
     L_d =  np.linalg.norm(lookahead_vector)
     alpha = wrap_to_pi(heading - state[4]) #* 3.6 / np.linalg.norm(lookahead_pt - state[0:2])
     delta = np.arctan(2 * wheelbase * np.sin(alpha) / L_d)
-    # Clip outputs to actuator/state bounds defined in RaceCar.parameters
+    # Clip outputs bounds defined in RaceCar.parameters
     delta = np.clip(delta, parameters[1], parameters[4] )
 
     desired_velocity = racetrack.desired_speed[closest_idx]
-    desired_velocity = float(np.clip(desired_velocity, 5, 100))
+    desired_velocity = float(np.clip(desired_velocity, 5, 100)) # Min velocity of 5 to make sure that the car doesn't stop
     return np.array([delta, desired_velocity]).T
