@@ -75,9 +75,12 @@ def controller( # S_1 S_2
     for i in range(closest_idx, len(racetrack.centerline)):
         if i == closest_idx:
             continue
-        cumulative_dist += np.linalg.norm(racetrack.centerline[i] - racetrack.centerline[i-1])
-        if cumulative_dist >= look_ahead:
-            target_idx = i
+        if i < len(racetrack.centerline):
+            cumulative_dist += np.linalg.norm(racetrack.centerline[i] - racetrack.centerline[i-1])
+            if cumulative_dist >= look_ahead:
+                target_idx = i
+                break
+        else:
             break
 
     # dist_const = 7
@@ -115,8 +118,12 @@ def controller( # S_1 S_2
         v_desired = 5
     elif abs(state[2]) < 0.05 and abs(state[2]) >= 0.04:
         v_desired = 10
-    elif abs(state[2]) < 0.04 and abs(state[2]) >= 0.02:
+    elif abs(state[2]) < 0.04 and abs(state[2]) >= 0.03:
+        v_desired = 15
+    elif abs(state[2]) < 0.03 and abs(state[2]) >= 0.02:
         v_desired = 20
+    elif abs(state[2]) < 0.04 and abs(state[2]) >= 0.01:
+        v_desired = 25
     else:
         v_desired = min(30, parameters[5])
     print(v_desired)
