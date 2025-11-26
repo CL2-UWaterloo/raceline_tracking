@@ -29,6 +29,8 @@ class Simulator:
         self.track_limit_violations = 0
         self.currently_violating = False
 
+        self.ticks = 0
+
     def check_track_limits(self):
         car_position = self.car.state[0:2]
         
@@ -68,7 +70,9 @@ class Simulator:
     def run(self):
         try:
             if self.lap_finished:
+                print(self.ticks)
                 exit()
+            self.ticks += 1
 
             self.figure.canvas.flush_events()
             self.axis.cla()

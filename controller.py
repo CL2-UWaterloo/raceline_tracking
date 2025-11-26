@@ -66,12 +66,14 @@ def controller(
     centerline_distances = np.linalg.norm(racetrack.centerline - state[0:2], axis=1)
     closest_idx = np.argmin(centerline_distances)   
     cur_v = float(state[3])
-    # linearly interpolate lookahead amount from 2 to 10 based on current velocity
+    # interpolate lookahead amount from 1 to 5 based on current velocity with fast ramp-up
     v_min = 0.0
     v_max = 100.0
-    lookahead_min = 2
-    lookahead_max = 10
-    lookahead_amt = int(np.round(np.interp(cur_v, [v_min, v_max], [float(lookahead_min), float(lookahead_max)])))
+    lookahead_min = 1
+    lookahead_max = 5
+    # normalize velocity to [0, 1], apply power function for fast ramp-up, then scale to lookahead range
+    normalized_v = np.clip((cur_v - v_min) / (v_max - v_min), 0, 1)
+    lookahead_amt = int(np.round(lookahead_min + (lookahead_max - lookahead_min) * (normalized_v ** 0.3)))
     
     # compute desired heading based on one point ahead on the centerline
     lookahead_idx = (closest_idx + lookahead_amt) % len(racetrack.centerline)
@@ -84,7 +86,7 @@ def controller(
     
     # heading = wrap_to_pi(heading) 
     L_d =  np.linalg.norm(lookahead_vector)
-    alpha = wrap_to_pi(heading - state[4]) #* 3.6 / np.linalg.norm(lookahead_pt - state[0:2])
+    alpha = wrap_to_pi(heading - state[4]) 
     delta = np.arctan(2 * wheelbase * np.sin(alpha) / L_d)
     # Clip outputs bounds defined in RaceCar.parameters
     delta = np.clip(delta, parameters[1], parameters[4])
