@@ -25,7 +25,7 @@ from simulator import RaceTrack, plt
 error_v_sum = 0
 error_phi_sum = 0
 
-last_error_v = 0
+last_error_v = None
 last_error_phi = 0
 dt = 0.001
 def lower_controller(
@@ -47,14 +47,17 @@ def lower_controller(
     K_p_accel = 2
     desired_accel_p = K_p_accel * error_v 
     # I
-    K_i_accel = 0
+    K_i_accel = 1
     error_v_sum += dt * error_v
     desired_accel_i = K_i_accel * error_v_sum
     # D
-    K_d_accel = 0
-    desired_accel_d = K_d_accel * (error_v - last_error_v) / dt
+    K_d_accel = 0.1
+    desired_accel_d = 0
+    if last_error_v is not None:
+        desired_accel_d = K_d_accel * (error_v - last_error_v) / dt
     last_error_v = error_v
 
+    print(desired_accel_p, desired_accel_i, desired_accel_d)
 
     desired_accel = np.clip(
         desired_accel_p + desired_accel_i + desired_accel_d, 
@@ -121,5 +124,9 @@ def controller(
     desired_angle = np.arctan2(2 * lwb * np.sin(alpha), lookahead)
     desired_angle = np.clip(desired_angle, parameters[1], parameters[4])
 
-    desired_velocity =  0.3 * parameters[5] * max(1.0 - 3 * np.abs(desired_angle) / parameters[4], 0.1)
+    max_v_prop = 0.6
+    min_target_prop = 0.3
+    desired_velocity = parameters[5] * max(
+        min_target_prop, 
+        max_v_prop * (1.0 - 5 * np.abs(desired_angle) / parameters[4]))
     return np.array([desired_angle, desired_velocity]).T
