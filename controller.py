@@ -63,7 +63,7 @@ def controller(
         else:
             nextHeading = parameters[3] / 2
     else:
-        np.arctan2((ry - sy), (rx - sx)) 
+        nextHeading = np.arctan2((ry - sy), (rx - sx)) 
     desired_angle = coeff * (nextHeading - currentHeading)
         
     return np.array([desired_angle, desired_velocity]).T
