@@ -32,6 +32,9 @@ def lower_controller( # C_2 C_1
     K_p = 0.1
     K_i = 1
     K_d = 15
+    # K_p = 1
+    # K_i = 1
+    # K_d = 50
     heading_error = ((desired[0] - (state[4] + state[2])) * parameters[0]) / (50 * 0.1)
     # Normalize angle to [-pi, pi]
     heading_error = atan2(np.sin(heading_error), np.cos(heading_error))
@@ -108,11 +111,13 @@ def controller( # S_1 S_2
         v_desired = 1
     elif abs(state[2]) > 0.12:
         v_desired = 3
-    elif abs(state[2]) < 0.05 and abs(state[2]) > 0.02:
-        v_desired = 15
-    elif abs(state[2]) < 0.08 and abs(state[2]) > 0.05:
+    elif abs(state[2]) < 0.08 and abs(state[2]) >= 0.05:
         v_desired = 5
-    elif v_desired > min(30, parameters[5]):
+    elif abs(state[2]) < 0.05 and abs(state[2]) >= 0.04:
+        v_desired = 10
+    elif abs(state[2]) < 0.04 and abs(state[2]) >= 0.02:
+        v_desired = 20
+    else:
         v_desired = min(30, parameters[5])
     print(v_desired)
     
