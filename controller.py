@@ -20,23 +20,67 @@ from simulator import RaceTrack, plt
         # ])
 
 
+
+
+error_v_sum = 0
+error_phi_sum = 0
+
+last_error_v = 0
+last_error_phi = 0
+dt = 0.001
 def lower_controller(
     state : ArrayLike, desired : ArrayLike, parameters : ArrayLike
 ) -> ArrayLike:
+    global error_v_sum
+    global error_phi_sum
+    global last_error_v
+    global last_error_phi
     # [steer angle, velocity]
     assert(desired.shape == (2,))
 
     # differnce signals 
-    d_v = desired[1] - state[3]
-    d_phi = desired[0] - state[2]
-    
-    K_p_accel = 2
-    desired_accel = K_p_accel * np.clip(d_v * 10, parameters[8], parameters[10])
+    error_v = desired[1] - state[3]
+    error_phi = desired[0] - state[2]
 
-    
+    # accel
+    # P  
+    K_p_accel = 2
+    desired_accel_p = K_p_accel * error_v 
+    # I
+    K_i_accel = 0
+    error_v_sum += dt * error_v
+    desired_accel_i = K_i_accel * error_v_sum
+    # D
+    K_d_accel = 0
+    desired_accel_d = K_d_accel * (error_v - last_error_v) / dt
+    last_error_v = error_v
+
+
+    desired_accel = np.clip(
+        desired_accel_p + desired_accel_i + desired_accel_d, 
+        parameters[8], 
+        parameters[10])
     # steering  
+    # P
     K_p_steering = 1
-    desired_steering = K_p_steering * np.clip(d_phi, parameters[7], parameters[9])
+    desired_steering_p = K_p_steering * error_phi
+
+    # I
+    K_i_steering = 1
+    error_phi_sum += dt * error_phi
+    desired_steering_i = K_i_steering * error_phi_sum
+
+
+    # D
+    K_d_steering = 1
+    desired_steering_d = K_d_steering * (error_phi - last_error_phi) / dt
+    # last_error_phi = error_phi
+
+    desired_steering = np.clip(
+        desired_steering_p + desired_steering_i + desired_steering_d,
+        parameters[7],
+        parameters[9]
+    )
 
     return np.array([desired_steering, desired_accel]).T
 
@@ -57,7 +101,7 @@ def controller(
     sy = state[1]
     currentHeading = state[4] 
     rx, ry = racetrack.centerline[i]
-    if (sx - rx) ** 2 + (sy - ry) ** 2 <= distance_threshold ** 2:
+    while (sx - rx) ** 2 + (sy - ry) ** 2 <= distance_threshold ** 2:
         i = (i + 1) % len(racetrack.centerline) 
         rx, ry = racetrack.centerline[i]
 
@@ -77,6 +121,5 @@ def controller(
     desired_angle = np.arctan2(2 * lwb * np.sin(alpha), lookahead)
     desired_angle = np.clip(desired_angle, parameters[1], parameters[4])
 
-    desired_velocity = 0.2 * parameters[5] * max(1.0 - 2.0 * np.abs(desired_angle) / parameters[4], 0.1)
-    print(desired_velocity)
+    desired_velocity =  0.3 * parameters[5] * max(1.0 - 3 * np.abs(desired_angle) / parameters[4], 0.1)
     return np.array([desired_angle, desired_velocity]).T
