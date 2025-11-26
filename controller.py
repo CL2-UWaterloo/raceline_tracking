@@ -12,7 +12,7 @@ from helpers import estimate_upcoming_curvature
 class C1:
     def __init__(self):
         # Parameters for velocity PID controller
-        self.K_p = 3.0 
+        self.K_p = 3.0
         self.K_i = 0.1
         self.K_d = 0.5
         self.prev_error = 0.0
@@ -46,15 +46,15 @@ class C1:
 class C2:
     def __init__(self):
         # Parameters for steering PID controller
-        self.K_p = 7.2
+        self.K_p = 8.2
         self.K_i = 0.2
-        self.K_d = 1.6  # Reduced to prevent oscillations in tight corners
+        self.K_d = 2.2  # Reduced to prevent oscillations in tight corners
         self.prev_error = 0.0
         self.integral_error = 0.0
         self.max_integral = 1.5
 
         # Derivative filtering to smooth out noise
-        self.derivative_filter_alpha = 0.3  # Low-pass filter coefficient
+        self.derivative_filter_alpha = 0.35  # Low-pass filter coefficient
         self.filtered_derivative = 0.0
 
     def step(
