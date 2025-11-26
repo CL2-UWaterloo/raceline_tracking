@@ -45,7 +45,6 @@ def lower_controller(
     elif (d_phi < 0):
         desired_steering = parameters[1]
 
-    desired_steering *= abs(d_phi) / parameters[6]    
 
     return np.array([desired_steering, desired_accel]).T
 
