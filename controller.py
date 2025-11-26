@@ -39,11 +39,13 @@ def lower_controller(
     
     # steering 
     desired_steering = 0
+ 
     if (d_phi > 0):
-        desired_steering = 0.1 * parameters[4]
+        desired_steering = parameters[4]
     elif (d_phi < 0):
-        desired_steering = 0.1 * parameters[1]
-    
+        desired_steering = parameters[1]
+
+    desired_steering *= abs(d_phi) / parameters[6]    
 
     return np.array([desired_steering, desired_accel]).T
 
@@ -51,7 +53,7 @@ def lower_controller(
 # global state
 i = 0 # current index
 # constants
-distance_threshold = 4
+distance_threshold = 5
 
 def controller(
     state : ArrayLike, parameters : ArrayLike, racetrack : RaceTrack
