@@ -84,11 +84,34 @@ class Simulator:
             self.update_status()
             self.check_track_limits()
 
+            # Calculate desired heading for visualization
+            # centerline_distances = np.linalg.norm(self.rt.centerline - self.car.state[0:2], axis=1)
+            # closest_idx = np.argmin(centerline_distances)
+            # cur_v = float(self.car.state[3])
+            # lookahead_amt = int(np.round(np.interp(cur_v, [0.0, 100.0], [2.0, 10.0])))
+            # lookahead_idx = (closest_idx + lookahead_amt) % len(self.rt.centerline)
+            # lookahead_pt = self.rt.centerline[lookahead_idx]
+            # lookahead_vector = lookahead_pt - self.car.state[0:2]
+            # desired_heading = np.arctan2(lookahead_vector[1], lookahead_vector[0])
+
+            # Current heading (blue)
             self.axis.arrow(
                 self.car.state[0], self.car.state[1], \
                 self.car.wheelbase*np.cos(self.car.state[4]), \
-                self.car.wheelbase*np.sin(self.car.state[4])
+                self.car.wheelbase*np.sin(self.car.state[4]), \
+                # color='blue', head_width=2, head_length=3, label='c'
             )
+            
+            # # Desired heading (green)
+            # self.axis.arrow(
+            #     self.car.state[0], self.car.state[1], \
+            #     self.car.wheelbase*np.cos(desired_heading), \
+            #     self.car.wheelbase*np.sin(desired_heading), \
+            #     color='green', head_width=2, head_length=3, label='d'
+            # )
+            
+            # # Lookahead point marker (red circle)
+            # self.axis.plot(lookahead_pt[0], lookahead_pt[1], 'ro', markersize=5, label='Lookahead')
 
             self.axis.text(
                 self.car.state[0] + 195, self.car.state[1] + 195, "Lap completed: " + str(self.lap_finished),

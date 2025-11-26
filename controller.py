@@ -4,7 +4,7 @@ from numpy.typing import ArrayLike
 from simulator import RaceTrack
 
 class PIDController:
-    def __init__(self, K_p: float, K_i: float, K_d: float, dt: float = 0.1):
+    def __init__(self, K_p: float, K_i: float, K_d: float, dt: float = 1.0):
         self.K_p = K_p
         self.K_i = K_i
         self.K_d = K_d
@@ -34,8 +34,8 @@ class PIDController:
 def wrap_to_pi(angle: float) -> float:
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
-steering_pid = PIDController(K_p=10, K_i=0.4, K_d=0.1)
-velocity_pid = PIDController(K_p=10, K_i=0, K_d=0.6)
+steering_pid = PIDController(K_p=20, K_i=0, K_d=0)
+velocity_pid = PIDController(K_p=10, K_i=0, K_d=0)
 
 def lower_controller(
     state : ArrayLike, desired : ArrayLike, parameters : ArrayLike
@@ -62,13 +62,9 @@ def lower_controller(
 def controller(
     state : ArrayLike, parameters : ArrayLike, racetrack : RaceTrack
 ) -> ArrayLike:
-    # using the x and y coordinates of the car, find the closest point on the racetrack centerline
     wheelbase = parameters[0]
     centerline_distances = np.linalg.norm(racetrack.centerline - state[0:2], axis=1)
-    closest_idx = np.argmin(centerline_distances)
-
-    # desired_velocity = racetrack.desired_speed_map[closest_idx] # racetrack.desired_speed_map[closest_idx]
-   
+    closest_idx = np.argmin(centerline_distances)   
     cur_v = float(state[3])
     # linearly interpolate lookahead amount from 2 to 10 based on current velocity
     v_min = 0.0
@@ -91,8 +87,9 @@ def controller(
     alpha = wrap_to_pi(heading - state[4]) #* 3.6 / np.linalg.norm(lookahead_pt - state[0:2])
     delta = np.arctan(2 * wheelbase * np.sin(alpha) / L_d)
     # Clip outputs bounds defined in RaceCar.parameters
-    delta = np.clip(delta, parameters[1], parameters[4] )
+    delta = np.clip(delta, parameters[1], parameters[4])
 
     desired_velocity = racetrack.desired_speed[closest_idx]
     desired_velocity = float(np.clip(desired_velocity, 5, 100)) # Min velocity of 5 to make sure that the car doesn't stop
+    
     return np.array([delta, desired_velocity]).T

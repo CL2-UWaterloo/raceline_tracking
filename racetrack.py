@@ -5,8 +5,28 @@ import matplotlib.patches as patches
 import matplotlib.axes as axes
 
 def wrap_to_pi(angle : float) -> float:
-    """Wrap angle to [-pi, pi]"""
     return (angle + np.pi) % (2 * np.pi) - np.pi    
+
+def menger_curvature(p1, p2, p3):
+        # Calculate side lengths
+        a = np.linalg.norm(p2 - p3)
+        b = np.linalg.norm(p1 - p3)
+        c = np.linalg.norm(p1 - p2)
+
+        # Calculate semi-perimeter
+        s = (a + b + c) / 2
+
+        # Calculate area using Heron's formula
+        try:
+            area = np.sqrt(s * (s - a) * (s - b) * (s - c))
+        except ValueError: # Occurs if s*(s-a)*(s-b)*(s-c) is slightly negative due to precision
+            area = 0.0
+
+        # Calculate curvature
+        if a * b * c == 0 or area == 0: # Handle collinear points or degenerate triangles
+            return 0.0
+        else:
+            return (4 * area) / (a * b * c)
 
 class RaceTrack:
 
@@ -57,64 +77,44 @@ class RaceTrack:
         self.mpl_left_track_limit_patch = patches.PathPatch(self.mpl_left_track_limit, linestyle="--", fill=False, lw=0.2)
 
         n = self.centerline.shape[0]
-        self.desired_speed = np.zeros(n)
         curvature_v_max = np.zeros(n)
         
         max_v = 100.0          # Maximum speed on straights (m/s)
         friction_limit = 20.0  # Determines speed around curves
         max_accel = 20.0
         
-        # compute "ideal" speed purely based on curvature
+        # compute max speed purely based on curvature
         for i in range(n):
 
             p1 = self.centerline[(i - 1) % n]
             p2 = self.centerline[i]
             p3 = self.centerline[(i + 1) % n]
             
-            # Calculate radius of the circle passing through p1, p2, p3
-            # Using Menger curvature formula or simple geometric approximation
-            # Approximate geometric curvature: k = 2 * sin(ang) / |p1-p3|
-            
+            # Calculate radius of the circle passing through p1, p2, p3 using Menger's curvature formula
             v1 = p2 - p1
             v2 = p3 - p2
-            dist_segment = np.linalg.norm(v1) # Approximate distance
             
             # Angle between segments
             angle = np.arctan2(v2[1], v2[0]) - np.arctan2(v1[1], v1[0])
             angle = np.abs(wrap_to_pi(angle))
             
-            # If angle is very small, we are in a straight line
+            # If angle is very small, we are basically in a straight line so go at max speed
             if angle < 1e-4:
                 curvature_v_max[i] = max_v
             else:
-                # R ~ distance / angle (small angle approximation)
-                # v^2 / R = a_lat  =>  v = sqrt(R * a_lat)
-                radius = dist_segment / (angle + 1e-6)
+                curvature = menger_curvature(p1, p2, p3)
+                radius = 1 / (curvature + 1e-6)
                 curvature_v_max[i] = np.sqrt(friction_limit * radius)
 
-        profile = np.clip(curvature_v_max, 0, max_v)
-        # Backpropragation to make sure that for each desired velocity, we can actually hit it based on our max acceleration
+        self.desired_speed = np.clip(curvature_v_max, 0, max_v)
+        # make sure that for each desired velocity, we can actually hit it based on our max acceleration
         for i in range(n - 1, -1, -1):
-            # The next point (conceptually ahead of us)
             next_idx = (i + 1) % n
-            
-            dist = np.linalg.norm(self.centerline[next_idx] - self.centerline[i])
-            
-            # Allowed entry speed at 'i' to reach speed at 'i+1' using max braking
-            # v_i^2 = v_{i+1}^2 + 2 * a * d
-            allowed_v = np.sqrt(profile[next_idx]**2 + 2 * max_accel * dist)
-            
-            # Take the minimum of the physical corner limit and the braking limit
-            profile[i] = min(profile[i], allowed_v)
-        # Same thing but in the forward directionn
-        for i in range(n):
-            prev_idx = (i - 1) % n
-            dist = np.linalg.norm(self.centerline[i] - self.centerline[prev_idx])
-            
-            allowed_v = np.sqrt(profile[prev_idx]**2 + 2 * max_accel * dist)
-            profile[i] = min(profile[i], allowed_v)
+            d = np.linalg.norm(self.centerline[next_idx] - self.centerline[i])
 
-        self.desired_speed = profile
+            # compute max speed using v_f^2 = v_i^2 + 2 * a * d and taking the min with curvature-based speed
+            allowed_v = np.sqrt(self.desired_speed[next_idx]**2 + 2 * max_accel * d)
+            self.desired_speed[i] = min(self.desired_speed[i], allowed_v)
 
     def plot_track(self, axis : axes.Axes):
         axis.add_patch(self.mpl_centerline_patch)
