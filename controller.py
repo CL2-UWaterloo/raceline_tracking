@@ -27,7 +27,7 @@ error_phi_sum = 0
 
 last_error_v = None
 last_error_phi = 0
-dt = 0.001
+dt = 0.1
 def lower_controller(
     state : ArrayLike, desired : ArrayLike, parameters : ArrayLike
 ) -> ArrayLike:
@@ -65,7 +65,7 @@ def lower_controller(
         parameters[10])
     # steering  
     # P
-    K_p_steering = 1000
+    K_p_steering = 10
     desired_steering_p = K_p_steering * error_phi
 
     # I
@@ -75,7 +75,7 @@ def lower_controller(
 
 
     # D
-    K_d_steering = 0.1
+    K_d_steering = 1
     desired_steering_d = K_d_steering * (error_phi - last_error_phi) / dt
     last_error_phi = error_phi
 
