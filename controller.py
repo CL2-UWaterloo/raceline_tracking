@@ -62,7 +62,7 @@ def lower_controller(
         parameters[10])
     # steering  
     # P
-    K_p_steering = 1
+    K_p_steering = 1000
     desired_steering_p = K_p_steering * error_phi
 
     # I
@@ -72,9 +72,9 @@ def lower_controller(
 
 
     # D
-    K_d_steering = 1
+    K_d_steering = 0
     desired_steering_d = K_d_steering * (error_phi - last_error_phi) / dt
-    # last_error_phi = error_phi
+    last_error_phi = error_phi
 
     desired_steering = np.clip(
         desired_steering_p + desired_steering_i + desired_steering_d,
