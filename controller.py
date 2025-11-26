@@ -1,7 +1,8 @@
 import numpy as np
 from numpy.typing import ArrayLike
 
-from simulator import RaceTrack
+# REMOVE PLT debug
+from simulator import RaceTrack, plt
 
 # state = [x, y, steering_angle, velocity, heading]
 # paramters = self.parameters = np.array([
@@ -29,22 +30,13 @@ def lower_controller(
     d_v = desired[1] - state[3]
     d_phi = desired[0] - state[2]
     
+    K_p_accel = 2
+    desired_accel = K_p_accel * np.clip(d_v * 10, parameters[8], parameters[10])
 
-    # a
-    desired_accel = 0
-    if (d_v > 0):
-        desired_accel = parameters[10]
-    elif (d_v < 0):
-        desired_accel = parameters[8]
     
-    # steering 
-    desired_steering = 0
- 
-    if (d_phi > 0):
-        desired_steering = parameters[4]
-    elif (d_phi < 0):
-        desired_steering = parameters[1]
-
+    # steering  
+    K_p_steering = 1
+    desired_steering = K_p_steering * np.clip(d_phi, parameters[7], parameters[9])
 
     return np.array([desired_steering, desired_accel]).T
 
@@ -52,14 +44,13 @@ def lower_controller(
 # global state
 i = 0 # current index
 # constants
-distance_threshold = 5
+distance_threshold = 20
 
 def controller(
     state : ArrayLike, parameters : ArrayLike, racetrack : RaceTrack
 ) -> ArrayLike:
     global i
     # velocity
-    desired_velocity = 0.1 * parameters[5] 
 
     # compute desired angle
     sx = state[0]
@@ -69,19 +60,23 @@ def controller(
     if (sx - rx) ** 2 + (sy - ry) ** 2 <= distance_threshold ** 2:
         i = (i + 1) % len(racetrack.centerline) 
         rx, ry = racetrack.centerline[i]
-    
+
+    plt.plot([rx], [ry], 'o')
+
+    dx = rx - sx
+    dy = ry - sy
+
+    # pure pursuit
 
     lwb = parameters[0]
+    alpha = np.arctan2((ry - sy), (rx - sx)) - currentHeading
 
-    coeff = lwb / desired_velocity
-    nextHeading = None
-    if rx - sx == 0:
-        if ry - sy > 0:
-            nextHeading = parameters[6] / 2
-        else:
-            nextHeading = parameters[3] / 2
-    else:
-        nextHeading = np.arctan2((ry - sy), (rx - sx)) 
-    desired_angle = coeff * (nextHeading - currentHeading)
-        
+    distance_to_target = np.sqrt(dx**2 + dy**2)
+    lookahead = max(lwb, distance_to_target)
+    
+    desired_angle = np.arctan2(2 * lwb * np.sin(alpha), lookahead)
+    desired_angle = np.clip(desired_angle, parameters[1], parameters[4])
+
+    desired_velocity = 0.2 * parameters[5] * max(1.0 - 2.0 * np.abs(desired_angle) / parameters[4], 0.1)
+    print(desired_velocity)
     return np.array([desired_angle, desired_velocity]).T
