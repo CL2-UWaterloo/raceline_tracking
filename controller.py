@@ -3,15 +3,67 @@ from numpy.typing import ArrayLike
 
 from simulator import RaceTrack
 
+# state = [x, y, steering_angle, velocity, heading]
+# paramters = self.parameters = np.array([
+        #     self.wheelbase, # Car Wheelbase 0
+        #     -self.max_steering_angle, # x3 1 
+        #     self.min_velocity, # x4 2
+        #     -np.pi, # x5 3
+        #     self.max_steering_angle, 4
+        #     self.max_velocity, 5
+        #     np.pi, 6
+        #     -self.max_steering_vel, # u1 7
+        #     -self.max_acceleration, # u2 8
+        #     self.max_steering_vel, 9 
+        #     self.max_acceleration 10
+        # ])
+
+
 def lower_controller(
     state : ArrayLike, desired : ArrayLike, parameters : ArrayLike
 ) -> ArrayLike:
     # [steer angle, velocity]
     assert(desired.shape == (2,))
 
+
+    
+
     return np.array([0, 100]).T
+
+
+# global state
+i = 0 # current index
+# constants
+distance_threshold = 0.5
 
 def controller(
     state : ArrayLike, parameters : ArrayLike, racetrack : RaceTrack
 ) -> ArrayLike:
-    return np.array([0, 100]).T
+    global i
+    # velocity
+    desired_velocity = parameters[2] 
+
+    # compute desired angle
+    sx = state[0]
+    sy = state[1]
+    currentHeading = state[3] 
+    rx, ry = racetrack.centerline[i]
+    if (sx - rx) ** 2 + (sy - ry) ** 2 <= distance_threshold ** 2:
+        i += 1 
+        rx, ry = racetrack.centerline[i]
+    
+
+    lwb = parameters[0]
+
+    coeff = lwb / desired_velocity
+    nextHeading = None
+    if rx - sx == 0:
+        if ry - sy > 0:
+            nextHeading = parameters[6] / 2
+        else:
+            nextHeading = parameters[3] / 2
+    else:
+        np.arctan2((ry - sy), (rx - sx)) 
+    desired_angle = coeff * (nextHeading - currentHeading)
+        
+    return np.array([desired_angle, desired_velocity]).T
