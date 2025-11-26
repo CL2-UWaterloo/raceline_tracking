@@ -73,9 +73,6 @@ class PIDController:
         
         return output
 
-# --------------------------------------------------------------------------
-# Vehicle Controller (Outer Loop + Inner Loop)
-# --------------------------------------------------------------------------
 class VehicleController:
     """
     Hierarchical Controller:
@@ -100,22 +97,40 @@ class VehicleController:
         # Path to track (Raceline or Centerline)
         self.path = raceline_data
         
+        # Track the last known good index to prevent backward searching
+        self.last_closest_idx = 0
+        
+        # Precompute path curvature for velocity planning
+        self.path_curvature = None
+        if self.path is not None:
+            self._precompute_curvature()
+        
         # Tunable Control Parameters
-        self.lookahead_dist = 8.0  # Adjusted for better tracking
-        self.target_velocity = 25.0 # Slightly faster target
+        # Velocity-adaptive lookahead: base + gain * velocity
+        self.lookahead_base = 5.0      # Minimum lookahead distance (m)
+        self.lookahead_gain = 0.7      # Balanced: tight in corners, smooth on straights
+        
+        # Physics-based velocity limits
+        self.max_straight_velocity = 90.0   # Top speed on straights (m/s)
+        self.min_velocity = 20.0            # Absolute minimum (safety)
+        self.curvature_lookahead = 45       # Balance: not too early, not too late
+        
+        # Lateral grip limit - max lateral acceleration before losing traction
+        # v_max = sqrt(a_lat_max / curvature)
+        # Balanced settings: safe in corners, fast on straights
+        self.max_lateral_accel = 14.0       # m/s^2 (~1.4g) - balanced
+        self.grip_margin = 0.82             # Use 82% of grip - good balance
         
         # PID Tunings
-        # Steering Rate PID
-        # Fast response needed.
-        kp_steer = 8.0
-        ki_steer = 2.0
-        kd_steer = 0.1
+        # Steering Rate PID - reduced gains to prevent oscillation
+        kp_steer = 5.0    # Reduced from 8.0 - less aggressive
+        ki_steer = 0.5    # Reduced from 2.0 - less integral windup
+        kd_steer = 0.2    # Increased slightly for damping
         
-        # Velocity PID
-        # Smooth acceleration
-        kp_vel = 2.0
-        ki_vel = 0.5
-        kd_vel = 0.0
+        # Velocity PID - more aggressive for faster acceleration
+        kp_vel = 3.0      # Increased for quicker response on straights
+        ki_vel = 0.5      # Increased to eliminate steady-state error
+        kd_vel = 0.1      # Added for smoother transitions
         
         self.steer_pid = PIDController(
             kp_steer, ki_steer, kd_steer, self.ts, 
@@ -129,6 +144,79 @@ class VehicleController:
 
     def set_path(self, path: ArrayLike):
         self.path = path
+        if self.path is not None:
+            self._precompute_curvature()
+    
+    def _precompute_curvature(self):
+        """
+        Precompute curvature at each point on the path.
+        Curvature κ = |dT/ds| where T is the unit tangent vector.
+        For discrete points: κ ≈ |Δθ| / |Δs|
+        """
+        n = len(self.path)
+        self.path_curvature = np.zeros(n)
+        
+        for i in range(n):
+            # Get three consecutive points
+            p0 = self.path[(i - 1) % n]
+            p1 = self.path[i]
+            p2 = self.path[(i + 1) % n]
+            
+            # Vectors
+            v1 = p1 - p0
+            v2 = p2 - p1
+            
+            # Lengths
+            len1 = np.linalg.norm(v1)
+            len2 = np.linalg.norm(v2)
+            
+            if len1 < 1e-6 or len2 < 1e-6:
+                self.path_curvature[i] = 0.0
+                continue
+            
+            # Angle change (using cross product for signed curvature)
+            cross = v1[0] * v2[1] - v1[1] * v2[0]
+            dot = np.dot(v1, v2)
+            angle_change = np.arctan2(cross, dot)
+            
+            # Arc length approximation
+            ds = (len1 + len2) / 2.0
+            
+            # Curvature magnitude
+            self.path_curvature[i] = abs(angle_change) / ds
+    
+    def _get_target_velocity(self, closest_idx):
+        """
+        Calculate target velocity based on physics - the maximum speed that 
+        keeps lateral acceleration within grip limits.
+        
+        Physics: a_lateral = v^2 * curvature
+        Therefore: v_max = sqrt(a_lat_max / curvature)
+        """
+        if self.path_curvature is None:
+            return self.min_velocity
+        
+        n = len(self.path)
+        
+        # Look ahead and find the maximum curvature in the upcoming section
+        max_curvature = 0.0
+        for i in range(self.curvature_lookahead):
+            idx = (closest_idx + i) % n
+            max_curvature = max(max_curvature, self.path_curvature[idx])
+        
+        # Physics-based maximum velocity
+        # v_max = sqrt(a_lateral_max / curvature)
+        if max_curvature < 1e-6:
+            # Essentially straight - go max speed
+            return self.max_straight_velocity
+        
+        # Calculate physics-limited speed with safety margin
+        v_physics = np.sqrt(self.max_lateral_accel / max_curvature) * self.grip_margin
+        
+        # Clamp to vehicle limits
+        target_vel = np.clip(v_physics, self.min_velocity, self.max_straight_velocity)
+        
+        return target_vel
 
     def compute_control(self, state: ArrayLike) -> ArrayLike:
         """
@@ -155,26 +243,49 @@ class VehicleController:
             return 0.0, 0.0
             
         x, y, delta, v, psi = state
+        n_points = len(self.path)
         
-        # Find closest point on path
-        # Optim: In a real scenario we would search locally, but here global search is okay for sim size
-        dists = np.linalg.norm(self.path - np.array([x, y]), axis=1)
+        # Velocity-adaptive lookahead distance
+        current_speed = max(abs(v), 1.0)
+        lookahead_dist = self.lookahead_base + self.lookahead_gain * current_speed
+        
+        # Find closest point - use GLOBAL search (more robust)
+        car_pos = np.array([x, y])
+        dists = np.linalg.norm(self.path - car_pos, axis=1)
         closest_idx = np.argmin(dists)
         
-        # Find lookahead point
-        n_points = len(self.path)
-        lookahead_idx = closest_idx
+        # Only allow moving forward on the track (prevent backwards jumps)
+        # But allow some backward tolerance for when car overshoots
+        idx_diff = closest_idx - self.last_closest_idx
+        if idx_diff < -10 and idx_diff > -n_points + 100:
+            # Big backwards jump (not crossing start/finish) - keep last position
+            closest_idx = self.last_closest_idx
         
-        for i in range(n_points):
+        self.last_closest_idx = closest_idx
+        
+        # Find lookahead point - search forward along the path
+        lookahead_idx = closest_idx
+        accumulated_dist = 0.0
+        
+        for i in range(1, min(200, n_points // 2)):
             idx = (closest_idx + i) % n_points
-            dist = np.linalg.norm(self.path[idx] - np.array([x, y]))
-            if dist > self.lookahead_dist:
+            prev_idx = (closest_idx + i - 1) % n_points
+            
+            # Accumulate distance along the path
+            segment_dist = np.linalg.norm(self.path[idx] - self.path[prev_idx])
+            accumulated_dist += segment_dist
+            
+            if accumulated_dist >= lookahead_dist:
                 lookahead_idx = idx
                 break
         
+        # Fallback
+        if lookahead_idx == closest_idx:
+            lookahead_idx = (closest_idx + 10) % n_points
+        
         target = self.path[lookahead_idx]
         
-        # Calculate Alpha
+        # Calculate Alpha (angle to target relative to heading)
         dx = target[0] - x
         dy = target[1] - y
         angle_to_target = np.arctan2(dy, dx)
@@ -183,10 +294,13 @@ class VehicleController:
         # Normalize alpha to [-pi, pi]
         alpha = np.arctan2(np.sin(alpha), np.cos(alpha))
         
-        # Pure Pursuit Geometry
-        lookahead_actual = np.linalg.norm([dx, dy])
+        # Pure Pursuit Steering
+        lookahead_actual = max(np.linalg.norm([dx, dy]), 0.1)
         desired_steer = np.arctan(2 * self.L * np.sin(alpha) / lookahead_actual)
         
         desired_steer = np.clip(desired_steer, -self.max_steer_angle, self.max_steer_angle)
         
-        return desired_steer, self.target_velocity
+        # Calculate target velocity based on upcoming curvature
+        target_vel = self._get_target_velocity(closest_idx)
+        
+        return desired_steer, target_vel
