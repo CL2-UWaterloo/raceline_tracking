@@ -12,7 +12,7 @@ class S1:
     """
 
     def __init__(self):
-        self.base_velocity = 75.0  # m/s - slightly more conservative
+        self.base_velocity = 80.0  # m/s - slightly more conservative
         self.lookahead_distance = 30  # index points - look further ahead
         self.max_lateral_accel = 12.5  # m/s^2 (~1.3g) - more conservative
 
