@@ -124,9 +124,13 @@ def controller(
     desired_angle = np.arctan2(2 * lwb * np.sin(alpha), lookahead)
     desired_angle = np.clip(desired_angle, parameters[1], parameters[4])
 
-    max_v_prop = 0.6
+    max_v_prop = 0.5
     min_target_prop = 0.3
+    angle_prop =  np.abs(desired_angle) / parameters[4]
+    angle_multiplier = 10
+    offset = 0
+    power = 3
     desired_velocity = parameters[5] * max(
         min_target_prop, 
-        max_v_prop * (1.0 - 5 * np.abs(desired_angle) / parameters[4]))
+        max_v_prop * (1.0 - (angle_multiplier * angle_prop + offset) ** power + offset ** power))
     return np.array([desired_angle, desired_velocity]).T
