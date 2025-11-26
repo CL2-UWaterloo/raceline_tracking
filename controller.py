@@ -26,8 +26,8 @@ def lower_controller(
     assert(desired.shape == (2,))
 
     # differnce signals 
-    d_v = state[3] - desired[1]
-    d_phi = state[2] - desired[0]
+    d_v = desired[1] - state[3]
+    d_phi = desired[0] - state[2]
     
 
     # a
@@ -40,19 +40,18 @@ def lower_controller(
     # steering 
     desired_steering = 0
     if (d_phi > 0):
-        desired_steering = parameters[4]
+        desired_steering = 0.1 * parameters[4]
     elif (d_phi < 0):
-        desired_steering = parameters[1]
+        desired_steering = 0.1 * parameters[1]
     
-
 
     return np.array([desired_steering, desired_accel]).T
 
 
 # global state
-i = 10 # current index
+i = 0 # current index
 # constants
-distance_threshold = 0.5
+distance_threshold = 4
 
 def controller(
     state : ArrayLike, parameters : ArrayLike, racetrack : RaceTrack
@@ -64,10 +63,10 @@ def controller(
     # compute desired angle
     sx = state[0]
     sy = state[1]
-    currentHeading = state[3] 
+    currentHeading = state[4] 
     rx, ry = racetrack.centerline[i]
     if (sx - rx) ** 2 + (sy - ry) ** 2 <= distance_threshold ** 2:
-        i += 1 
+        i = (i + 1) % len(racetrack.centerline) 
         rx, ry = racetrack.centerline[i]
     
 
