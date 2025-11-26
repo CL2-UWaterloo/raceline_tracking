@@ -72,7 +72,7 @@ def lower_controller(
 
 
     # D
-    K_d_steering = 0
+    K_d_steering = 0.1
     desired_steering_d = K_d_steering * (error_phi - last_error_phi) / dt
     last_error_phi = error_phi
 
