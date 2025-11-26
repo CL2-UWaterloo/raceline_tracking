@@ -35,7 +35,7 @@ def wrap_to_pi(angle: float) -> float:
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
 steering_pid = PIDController(K_p=10, K_i=0.4, K_d=0.1)
-velocity_pid = PIDController(K_p=5, K_i=0.4, K_d=0.1)
+velocity_pid = PIDController(K_p=10, K_i=0, K_d=0.6)
 
 def lower_controller(
     state : ArrayLike, desired : ArrayLike, parameters : ArrayLike
@@ -69,8 +69,16 @@ def controller(
 
     # desired_velocity = racetrack.desired_speed_map[closest_idx] # racetrack.desired_speed_map[closest_idx]
    
+    cur_v = float(state[3])
+    print(cur_v)
+    # linearly interpolate lookahead amount from 2 to 10 based on current velocity
+    # v_min=0 -> lookahead=2, v_max=100 -> lookahead=10
+    v_min = 0.0
+    v_max = 100.0
+    lookahead_min = 2
+    lookahead_max = 10
+    lookahead_amt = int(np.round(np.interp(cur_v, [v_min, v_max], [float(lookahead_min), float(lookahead_max)])))
     
-    lookahead_amt = 4 # int(np.floor(desired_velocity / 10.0) + 1)
     # compute desired heading based on one point ahead on the centerline
     lookahead_idx = (closest_idx + lookahead_amt) % len(racetrack.centerline)
     lookahead_pt = racetrack.centerline[lookahead_idx]
@@ -87,21 +95,6 @@ def controller(
     # Clip outputs to actuator/state bounds defined in RaceCar.parameters
     delta = np.clip(delta, parameters[1], parameters[4] )
 
-    # approximate curvature from pure-pursuit geometry (signed)
-    # use absolute curvature for speed calculation and guard against zeros
-    kappa = abs(2.0 * np.sin(alpha) / L_d)
-        
-    # map curvature -> speed using lateral-acceleration limit: v = sqrt(a_lat / kappa)
-    a_lat_max = 6.0
-    v_max = float(parameters[5])
-    v_min = 5.0
-
-    if kappa <= 1e-9:
-        desired_velocity = v_max
-    else:
-        desired_velocity = np.sqrt((a_lat_max) / kappa)
-        if not np.isfinite(desired_velocity):
-            desired_velocity = v_min
-
-    desired_velocity = float(np.clip(desired_velocity, v_min, v_max))
+    desired_velocity = racetrack.desired_speed[closest_idx]
+    desired_velocity = float(np.clip(desired_velocity, 5, 100))
     return np.array([delta, desired_velocity]).T
