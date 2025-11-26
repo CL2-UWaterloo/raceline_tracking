@@ -25,14 +25,32 @@ def lower_controller(
     # [steer angle, velocity]
     assert(desired.shape == (2,))
 
-
+    # differnce signals 
+    d_v = state[3] - desired[1]
+    d_phi = state[2] - desired[0]
     
 
-    return np.array([0, 100]).T
+    # a
+    desired_accel = 0
+    if (d_v > 0):
+        desired_accel = parameters[10]
+    elif (d_v < 0):
+        desired_accel = parameters[8]
+    
+    # steering 
+    desired_steering = 0
+    if (d_phi > 0):
+        desired_steering = parameters[4]
+    elif (d_phi < 0):
+        desired_steering = parameters[1]
+    
+
+
+    return np.array([desired_steering, desired_accel]).T
 
 
 # global state
-i = 0 # current index
+i = 10 # current index
 # constants
 distance_threshold = 0.5
 
@@ -41,7 +59,7 @@ def controller(
 ) -> ArrayLike:
     global i
     # velocity
-    desired_velocity = parameters[2] 
+    desired_velocity = 0.1 * parameters[5] 
 
     # compute desired angle
     sx = state[0]
