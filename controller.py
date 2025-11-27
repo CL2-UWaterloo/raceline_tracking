@@ -20,8 +20,8 @@ def lower_controller(
 
     # parameters
     max_steer_vel = parameters[9]
-    max_accel = parameters[10]  # allow more acceleration than normal
-    min_accel = parameters[8]   # allow more braking than normal
+    max_accel = parameters[10]
+    min_accel = parameters[8]  
 
     # steering Control 
     target_steer = desired[0]
@@ -62,7 +62,7 @@ def controller(
     # parameters
     wheelbase = parameters[0]
     max_steer = parameters[4]
-    max_vel = parameters[5] - 9.0  
+    max_vel = parameters[5]  
 
     # closest point on track
     car_pos = np.array([x, y])
@@ -113,7 +113,6 @@ def controller(
     # physical limits
     desired_steer = np.clip(desired_steer, -max_steer, max_steer)
     
-    # 5. Physics-based Speed Planning
     # Calculate max safe speed for the current required curvature
     # a_lat = v^2 / R  =>  v_max = sqrt(a_lat_max * R)
     # R = wheelbase / tan(steer)
@@ -136,10 +135,10 @@ def controller(
         v_corner_limit *= penalty
         
     # max velocity
-    target_v = min(v_corner_limit, max_vel)
+    target_v = min(v_corner_limit - 5.0, max_vel - 10.0)
     
     # minimum speed
-    target_v = max(target_v, 4.0)
+    target_v = max(target_v, 5.0)
     
     print(f"Lookahead: {look_ahead_dist:.1f}m, Steer: {desired_steer:.2f}rad, V_tgt: {target_v:.1f}m/s")
     
