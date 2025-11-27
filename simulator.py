@@ -28,6 +28,7 @@ class Simulator:
         self.lap_started = False
         self.track_limit_violations = 0
         self.currently_violating = False
+        self.ticks = 0
 
     def check_track_limits(self):
         car_position = self.car.state[0:2]
@@ -69,7 +70,8 @@ class Simulator:
         try:
             if self.lap_finished:
                 exit()
-
+            self.ticks += 1
+            
             self.figure.canvas.flush_events()
             self.axis.cla()
 
@@ -120,9 +122,11 @@ class Simulator:
         if progress > 10.0 and not self.lap_started:
             self.lap_started = True
     
-        if progress <= 1.0 and self.lap_started and not self.lap_finished:
+        if progress <= 5.0 and self.lap_started and not self.lap_finished:
             self.lap_finished = True
             self.lap_time_elapsed = time() - self.lap_start_time
+            print("Total ticks: ", self.ticks)
+            print("Total violations", self.track_limit_violations)
 
         if not self.lap_finished and self.lap_start_time is not None:
             self.lap_time_elapsed = time() - self.lap_start_time
@@ -133,3 +137,27 @@ class Simulator:
         self.timer.add_callback(self.run)
         self.lap_start_time = time()
         self.timer.start()
+
+
+    def simulateAll(self):
+        while True:
+            self.runNoPlot()
+    
+    def runNoPlot(self):
+        self.lap_start_time = time()
+        try:
+            if self.lap_finished:
+                exit()
+            self.ticks += 1
+            # print(self.ticks)
+
+            desired = controller(self.car.state, self.car.parameters, self.rt)
+            cont = lower_controller(self.car.state, desired, self.car.parameters)
+            self.car.update(cont)
+            self.update_status()
+            self.check_track_limits()
+
+            return True
+
+        except KeyboardInterrupt:
+            exit()
