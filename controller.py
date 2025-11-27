@@ -1,17 +1,7 @@
 import numpy as np
 from numpy.typing import ArrayLike
 
-# REMOVE PLT debug
-from simulator import RaceTrack, plt
-
-# state = [x, y, steering_angle, velocity, heading]
-
-
-
-# GLOBAL CONTROLLER PARAMS
-
-
-
+from simulator import RaceTrack
 
 
 error_v_sum = 0
@@ -69,29 +59,17 @@ def reset_globals():
 
 
 def closest_point_on_segment(rx, ry, px, py, sx, sy):
-    # Vector R→P
     vx = px - rx
     vy = py - ry
-
-    # Vector R→S
     wx = sx - rx
     wy = sy - ry
-
-    # Compute projection t of w onto v (normalized by |v|^2)
     segment_len_sq = vx*vx + vy*vy
     if segment_len_sq == 0:
-        # R and P are the same point
         return rx, ry
-
     t = (wx*vx + wy*vy) / segment_len_sq
-
-    # Clamp t to segment [0, 1]
     t = max(0, min(1, t))
-
-    # Closest point = R + t·(P−R)
     cx = rx + t * vx
     cy = ry + t * vy
-
     return cx, cy
 
 def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) -> ArrayLike:
@@ -110,7 +88,6 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
     while (sx - rx)**2 + (sy - ry)**2 <= distance_threshold**2:
         i = (i + 1) % len(points)
         rx, ry = points[i]
-    plt.plot(rx, ry, "o")
     
     rx, ry = closest_point_on_segment(rx, ry, points[i - 1][0], points[i - 1][1], sx, sy)
     dx = rx - sx
