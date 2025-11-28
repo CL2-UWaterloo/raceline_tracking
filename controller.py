@@ -118,9 +118,7 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
 
     centerline = racetrack.centerline
 
-    # ------------------------------------------------------
     # Cache heading and curvature
-    # ------------------------------------------------------
     if not hasattr(racetrack, "_heading"):
         racetrack._heading = compute_heading(centerline)
 
@@ -130,9 +128,7 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
     heading   = racetrack._heading
     curvature = racetrack._curvature
 
-    # ------------------------------------------------------
     # Cross-track error + LOCAL heading error (no lookahead)
-    # ------------------------------------------------------
     s, e_ct = compute_cross_track_error(state, racetrack)
 
     # desired heading at the same nearest centerline point
@@ -145,10 +141,8 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
 
     sharpness = abs(dphi_ahead) / np.pi 
 
-    # ------------------------------------------------------
-    # Look-ahead curvature for severity (for gain + speed)
-    # ------------------------------------------------------
-    L_steps = int(1 +  v)    # dynamic look-ahead for curvature
+
+    L_steps = int(1 +  v) # dynamic look-ahead for curvature
     N = len(curvature)
     idx = np.arange(s, s + L_steps) % N
 
@@ -158,12 +152,8 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
         racetrack._kappa_max = np.max(np.abs(curvature)) + 1e-6
     kappa_norm = kappa_ahead / racetrack._kappa_max   # in [0,1]
 
-    # mild gain factor (up to ~3x in very tight bits)
     gain_factor = 1.0 + 2.0 * kappa_norm
 
-    # ------------------------------------------------------
-    # PID on heading error (gain-scheduled, but local)
-    # ------------------------------------------------------
     dt = 0.1
     if not hasattr(racetrack, "_phi_int"):
         racetrack._phi_int  = 0.0
@@ -187,16 +177,12 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
 
     delta_pid = Kp * e_phi + Ki * racetrack._phi_int + Kd * e_phi_dot
 
-    # ------------------------------------------------------
     # Cross-track correction (also slightly stronger in tight corners)
-    # ------------------------------------------------------
     Kct_base = 0.05
     Kct = Kct_base * (1.0 + 1.0 * kappa_norm)
     delta_ct = Kct * e_ct
 
-    # ------------------------------------------------------
     # Curvature feedforward (using local curvature only)
-    # ------------------------------------------------------
     kappa_here = curvature[s]
     Kff = 0.9
     delta_ff = Kff * np.arctan(L * kappa_here)
@@ -205,9 +191,7 @@ def controller(state: ArrayLike, parameters: ArrayLike, racetrack: RaceTrack) ->
     delta_r = delta_ff + delta_pid + delta_ct
     delta_r = np.clip(delta_r, delta_min, delta_max)
 
-    # ------------------------------------------------------
     # SPEED COMPUTATION USING LATERAL ACCEL LIMIT + LOOK-AHEAD
-    # ------------------------------------------------------
     base_speed = 100.0
     min_turn_speed = -10.0
     a_lat_max = 8.0
